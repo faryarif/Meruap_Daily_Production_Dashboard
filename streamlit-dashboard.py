@@ -254,7 +254,7 @@ with map_col:
         hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
         text="well_name", map_style="open-street-map",
     )
-    fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=10))
+    fig_map.update_traces(textposition="top center", textfont=dict(color="black", size=12))
     fig_map.update_layout(
         height=420, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="#0b1220",
         legend=dict(bgcolor="rgba(20,29,46,0.8)", font=dict(color="#e2e8f0")),
