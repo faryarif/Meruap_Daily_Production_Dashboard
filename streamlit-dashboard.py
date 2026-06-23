@@ -217,7 +217,7 @@ with map_col:
         text="well_name",
         map_style="open-street-map",
     )
-    fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=10))
+    fig_map.update_traces(textposition="top center", textfont=dict(color="black", size=10))
     fig_map.update_layout(
         height=420,
         margin=dict(l=0, r=0, t=0, b=0),
