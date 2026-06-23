@@ -213,7 +213,7 @@ with map_col:
         size_max=14,
         hover_name="well_name",
         hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
-        zoom=12,
+        zoom=14,
         text="well_name",
         map_style="open-street-map",
     )
