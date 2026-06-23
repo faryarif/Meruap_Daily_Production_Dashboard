@@ -30,7 +30,14 @@ from google.oauth2.service_account import Credentials
 # ----------------------------------------------------------------------------
 st.set_page_config(page_title="Daily Production Dashboard", page_icon="🛢️", layout="wide")
 
-STATUS_COLORS = {"Producing": "#22c55e", "Shut-in": "#f59e0b", "Down": "#ef4444"}
+STATUS_COLORS = {
+    "Producing": "#22c55e",     # green
+    "Water Source": "#1e3a8a",  # dark blue
+    "Injector": "#3b82f6",      # blue
+    "Gas": "#f97316",           # orange
+    "Shut-in": "#ef4444",       # red
+    "Down": "#6b7280",          # gray
+}
 REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "water_cut_pct", "last_test_date"]
 HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "water_cut_pct"]
 
@@ -247,7 +254,7 @@ with map_col:
         hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
         text="well_name", map_style="open-street-map",
     )
-    fig_map.update_traces(textposition="top center", textfont=dict(color="black", size=10))
+    fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=10))
     fig_map.update_layout(
         height=420, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="#0b1220",
         legend=dict(bgcolor="rgba(20,29,46,0.8)", font=dict(color="#e2e8f0")),
