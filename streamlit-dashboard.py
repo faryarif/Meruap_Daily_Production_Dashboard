@@ -31,7 +31,7 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Daily Production Dashboard", page_icon="🛢️", layout="wide")
 
 STATUS_COLORS = {
-    "Producing": "#22c55e",      # green
+    "Oil": "#22c55e",            # green
     "Water Source": "#1e3a8a",   # dark blue
     "Injector": "#3b82f6",       # blue
     "Gas": "#f97316",            # orange
@@ -132,15 +132,15 @@ def generate_sample_wells():
     for i, name in enumerate(names):
         base_rate = rng.integers(80, 500)
         roll = rng.random()
-        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Producing"
+        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
         water_cut = int(rng.integers(10, 60))
-        bopd_val = int(base_rate) if status == "Producing" else 0
+        bopd_val = int(base_rate) if status == "Oil" else 0
         rows.append({
             "well_name": name, "field": fields[i % 3], "status": status,
             "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
             "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
             "bopd": bopd_val,
-            "bwpd": int(bopd_val * water_cut / 100) if status == "Producing" else 0,
+            "bwpd": int(bopd_val * water_cut / 100) if status == "Oil" else 0,
             "water_cut_pct": water_cut,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
@@ -181,7 +181,7 @@ st.sidebar.markdown("---")
 with st.sidebar.expander("📋 Expected CSV format"):
     st.code(
         "well_name,field,status,latitude,longitude,bopd,bwpd,water_cut_pct,injection_rate,last_test_date\n"
-        "Hawk-1,North Block,Producing,-2.51,110.52,320,90,22,0,2026-06-22\n"
+        "Hawk-1,North Block,Oil,-2.51,110.52,320,90,22,0,2026-06-22\n"
         "Heron-11,North Block,Injector,-2.49,110.53,0,0,0,180,2026-06-22\n"
         "Heron-12,North Block,Water Source,-2.48,110.54,0,0,0,150,2026-06-22",
         language="csv",
@@ -227,7 +227,7 @@ filtered = wells_df if field_filter == "All" else wells_df[wells_df["field"] == 
 # SUMMARY METRICS
 # ----------------------------------------------------------------------------
 total_bopd = int(filtered["bopd"].sum())
-active_count = int((filtered["status"] == "Producing").sum())
+active_count = int((filtered["status"] == "Oil").sum())
 shutin_count = int((filtered["status"] == "Shut-in").sum())
 down_count = int((filtered["status"] == "Down").sum())
 injector_count = int((filtered["status"] == "Injector").sum())
@@ -252,7 +252,7 @@ row1_c3.metric("Total Water Production", f"{total_water_production:,} BWPD")
 row1_c4.metric("Total Water Source", f"{total_water_source:,} BWPD")
 
 row2_c1, row2_c2, row2_c3, row2_c4, row2_c5 = st.columns(5)
-row2_c1.metric("Producing Wells", f"{active_count} / {len(filtered)}")
+row2_c1.metric("Oil Producing Wells", f"{active_count} / {len(filtered)}")
 row2_c2.metric("Injector Wells", injector_count)
 row2_c3.metric("Water Source Wells", water_source_count)
 row2_c4.metric("Shut-in", shutin_count)
