@@ -279,6 +279,11 @@ with pie_col:
     status_counts = filtered["status"].value_counts().reset_index()
     status_counts.columns = ["status", "count"]
     fig_pie = px.pie(status_counts, names="status", values="count", color="status", color_discrete_map=STATUS_COLORS, hole=0.55)
+    fig_pie.update_traces(
+        texttemplate="%{label}: %{value}",
+        textposition="outside",
+        hovertemplate="%{label}: %{value} wells<extra></extra>",
+    )
     fig_pie.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
                            legend=dict(font=dict(color="#e2e8f0"), orientation="h"), font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
