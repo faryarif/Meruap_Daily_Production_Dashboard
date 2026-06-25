@@ -234,7 +234,7 @@ injector_count = int((filtered["status"] == "Injector").sum())
 water_source_count = int((filtered["status"] == "Water Source").sum())
 total_injection = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
 total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "injection_rate"].sum())
-total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "injection_rate"].sum())
+total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
 total_water_production = int(filtered["bwpd"].sum())
 
 agg_history = history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date") if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
