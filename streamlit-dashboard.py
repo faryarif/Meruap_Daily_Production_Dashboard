@@ -39,8 +39,8 @@ STATUS_COLORS = {
     "Down": "#6b7280",           # gray — WO/WS (workover / well service)
     "Plug Abandon": "#ef4444",   # red
 }
-REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "injection_rate", "water_cut_pct", "last_test_date"]
-HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "injection_rate", "water_cut_pct"]
+REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]
+HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -80,7 +80,7 @@ def read_current():
     if not records:
         return None
     df = pd.DataFrame(records)
-    for col in ["latitude", "longitude", "bopd", "injection_rate", "water_cut_pct"]:
+    for col in ["latitude", "longitude", "bopd", "bwpd", "water_cut_pct", "injection_rate"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
@@ -93,7 +93,7 @@ def read_history():
     if not records:
         return pd.DataFrame(columns=HISTORY_COLS)
     df = pd.DataFrame(records)
-    for col in ["bopd", "injection_rate", "water_cut_pct"]:
+    for col in ["bopd", "bwpd", "water_cut_pct", "injection_rate"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
@@ -109,7 +109,7 @@ def write_current(df: pd.DataFrame):
 def append_history(df: pd.DataFrame, date_str: str):
     sheet = get_sheet()
     ws = sheet.worksheet("history")
-    snapshot = df[["well_name", "field", "status", "bopd", "injection_rate", "water_cut_pct"]].copy()
+    snapshot = df[["well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate"]].copy()
     snapshot.insert(0, "date", date_str)
     existing = ws.get_all_values()
     rows = snapshot.astype(str).values.tolist()
@@ -133,13 +133,16 @@ def generate_sample_wells():
         base_rate = rng.integers(80, 500)
         roll = rng.random()
         status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Producing"
+        water_cut = int(rng.integers(10, 60))
+        bopd_val = int(base_rate) if status == "Producing" else 0
         rows.append({
             "well_name": name, "field": fields[i % 3], "status": status,
             "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
             "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
-            "bopd": int(base_rate) if status == "Producing" else 0,
+            "bopd": bopd_val,
+            "bwpd": int(bopd_val * water_cut / 100) if status == "Producing" else 0,
+            "water_cut_pct": water_cut,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
-            "water_cut_pct": int(rng.integers(10, 60)),
             "last_test_date": "2026-06-23",
         })
     return pd.DataFrame(rows)
@@ -177,10 +180,10 @@ if uploaded_file is not None:
 st.sidebar.markdown("---")
 with st.sidebar.expander("📋 Expected CSV format"):
     st.code(
-        "well_name,field,status,latitude,longitude,bopd,injection_rate,water_cut_pct,last_test_date\n"
-        "Hawk-1,North Block,Producing,-2.51,110.52,320,0,22,2026-06-22\n"
-        "Heron-11,North Block,Injector,-2.49,110.53,0,180,0,2026-06-22\n"
-        "Heron-12,North Block,Water Source,-2.48,110.54,0,150,0,2026-06-22",
+        "well_name,field,status,latitude,longitude,bopd,bwpd,water_cut_pct,injection_rate,last_test_date\n"
+        "Hawk-1,North Block,Producing,-2.51,110.52,320,90,22,0,2026-06-22\n"
+        "Heron-11,North Block,Injector,-2.49,110.53,0,0,0,180,2026-06-22\n"
+        "Heron-12,North Block,Water Source,-2.48,110.54,0,0,0,150,2026-06-22",
         language="csv",
     )
 
@@ -203,7 +206,7 @@ if using_sample:
     if sheet_connected:
         st.info("No data published yet — showing sample data. Upload a file in the sidebar and click 'Publish' to replace it for everyone.")
 
-for col in ["injection_rate", "water_cut_pct", "last_test_date"]:
+for col in ["bwpd", "injection_rate", "water_cut_pct", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
 
@@ -231,7 +234,7 @@ injector_count = int((filtered["status"] == "Injector").sum())
 water_source_count = int((filtered["status"] == "Water Source").sum())
 total_injection = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
 total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "injection_rate"].sum())
-total_water_production = int((filtered["bopd"] * filtered["water_cut_pct"] / 100).sum())
+total_water_production = int(filtered["bwpd"].sum())
 
 agg_history = history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date") if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
 
@@ -379,9 +382,9 @@ with detail_col:
 # WELL TABLE
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
-display_df = filtered[["well_name", "field", "status", "bopd", "injection_rate", "water_cut_pct", "last_test_date"]].rename(
-    columns={"well_name": "Well", "field": "Field", "status": "Status", "bopd": "BOPD", "injection_rate": "Injection Rate",
-             "water_cut_pct": "Water Cut (%)", "last_test_date": "Last Test"}
+display_df = filtered[["well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]].rename(
+    columns={"well_name": "Well", "field": "Field", "status": "Status", "bopd": "BOPD", "bwpd": "BWPD",
+             "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate", "last_test_date": "Last Test"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
