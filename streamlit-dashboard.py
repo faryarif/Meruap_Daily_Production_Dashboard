@@ -36,7 +36,7 @@ STATUS_COLORS = {
     "Injector": "#3b82f6",      # blue
     "Gas": "#f97316",           # orange
     "Shut-in": "#ef4444",       # red
-    "Down": "#6b7280",          # gray
+    "Down": "#6b7280",          # gray — WO/WS (workover / well service)
 }
 REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "water_cut_pct", "last_test_date"]
 HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "water_cut_pct"]
@@ -254,7 +254,7 @@ with map_col:
         hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
         text="well_name", map_style="open-street-map",
     )
-    fig_map.update_traces(textposition="top center", textfont=dict(color="black", size=12))
+    fig_map.update_traces(textposition="top center", textfont=dict(color="black", size=10))
     fig_map.update_layout(
         height=420, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="#0b1220",
         legend=dict(bgcolor="rgba(20,29,46,0.8)", font=dict(color="#e2e8f0")),
