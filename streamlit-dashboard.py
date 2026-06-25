@@ -286,7 +286,32 @@ with map_col:
         hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
         text="well_name", map_style="open-street-map",
     )
-    fig_map.update_traces(textposition="top center", textfont=dict(color="black", size=10))
+    # Faux text outline: draw a black copy of the labels first (slightly
+    # offset in 4 directions), then the white labels on top. Plotly map text
+    # has no native stroke/halo, so this layered trick fakes a buffer.
+    offset_deg = 0.0006  # small lat offset to push labels further above the marker
+    for dx, dy in [(-0.00003, 0), (0.00003, 0), (0, -0.00003), (0, 0.00003)]:
+        fig_map.add_trace(go.Scattermap(
+            lat=filtered["latitude"] + offset_deg + dy,
+            lon=filtered["longitude"] + dx,
+            mode="text",
+            text=filtered["well_name"],
+            textfont=dict(color="black", size=10),
+            textposition="top center",
+            hoverinfo="skip",
+            showlegend=False,
+        ))
+    fig_map.add_trace(go.Scattermap(
+        lat=filtered["latitude"] + offset_deg,
+        lon=filtered["longitude"],
+        mode="text",
+        text=filtered["well_name"],
+        textfont=dict(color="white", size=10),
+        textposition="top center",
+        hoverinfo="skip",
+        showlegend=False,
+    ))
+    fig_map.update_traces(selector=dict(mode="markers+text"), text=None)
     fig_map.update_layout(
         height=420, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="#0b1220",
         legend=dict(bgcolor="rgba(20,29,46,0.8)", font=dict(color="#e2e8f0")),
