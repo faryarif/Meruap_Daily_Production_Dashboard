@@ -5,7 +5,6 @@ Run locally:
     pip install streamlit pandas plotly gspread google-auth
 
 Setup (one-time):
-    See the setup steps in chat — you need:
     1. A Google Sheet with two tabs: "current" and "history"
     2. A Google service account with Editor access to that sheet
     3. Streamlit secrets configured with the service account + sheet_id
@@ -39,6 +38,7 @@ STATUS_COLORS = {
     "Down": "#6b7280",           # gray — WO/WS (workover / well service)
     "Plug Abandon": "#ef4444",   # red
 }
+
 REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]
 HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate"]
 
@@ -233,7 +233,6 @@ down_count = int((filtered["status"] == "Down").sum())
 injector_count = int((filtered["status"] == "Injector").sum())
 water_source_count = int((filtered["status"] == "Water Source").sum())
 total_injection = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
-total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "injection_rate"].sum())
 total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
 total_water_production = int(filtered["bwpd"].sum())
 
@@ -251,19 +250,32 @@ row1_c2.metric("Total Injection", f"{total_injection:,} Barrels")
 row1_c3.metric("Total Water Production", f"{total_water_production:,} BWPD")
 row1_c4.metric("Total Water Source", f"{total_water_source:,} BWPD")
 
-row2_c1, row2_c2, row2_c3, row2_c4, row2_c5 = st.columns(5)
-row2_c1.metric("Oil Producing Wells", f"{active_count} / {len(filtered)}")
-row2_c2.metric("Injector Wells", injector_count)
-row2_c3.metric("Water Source Wells", water_source_count)
-row2_c4.metric("Shut-in", shutin_count)
-row2_c5.metric("Down", down_count)
-
 st.markdown("")
 
 # ----------------------------------------------------------------------------
-# MAP + STATUS BREAKDOWN
+# STATUS & FIELD TOTALS + WELL MAP (Status & Field Totals shown first)
 # ----------------------------------------------------------------------------
-map_col, pie_col = st.columns([1.3, 1])
+pie_col, map_col = st.columns([1, 1.3])
+
+with pie_col:
+    st.subheader("Status & Field Totals")
+    status_counts = filtered["status"].value_counts().reset_index()
+    status_counts.columns = ["status", "count"]
+    fig_pie = px.pie(status_counts, names="status", values="count", color="status", color_discrete_map=STATUS_COLORS, hole=0.55)
+    fig_pie.update_traces(
+        texttemplate="%{label}: %{value}",
+        textposition="outside",
+        hovertemplate="%{label}: %{value} wells<extra></extra>",
+    )
+    fig_pie.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+                           legend=dict(font=dict(color="#e2e8f0"), orientation="h"), font=dict(color="#e2e8f0"))
+    st.plotly_chart(fig_pie, use_container_width=True)
+
+    field_totals = wells_df.groupby("field")["bopd"].sum().reset_index()
+    fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h", color_discrete_sequence=["#38bdf8"])
+    fig_field.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+                             font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title=None)
+    st.plotly_chart(fig_field, use_container_width=True)
 
 with map_col:
     st.subheader("Well Map")
@@ -293,26 +305,6 @@ with map_col:
     ))
     st.plotly_chart(fig_map, use_container_width=True)
     st.caption("Basemap: Esri World Imagery (free satellite, no API key).")
-
-with pie_col:
-    st.subheader("Status & Field Totals")
-    status_counts = filtered["status"].value_counts().reset_index()
-    status_counts.columns = ["status", "count"]
-    fig_pie = px.pie(status_counts, names="status", values="count", color="status", color_discrete_map=STATUS_COLORS, hole=0.55)
-    fig_pie.update_traces(
-        texttemplate="%{label}: %{value}",
-        textposition="outside",
-        hovertemplate="%{label}: %{value} wells<extra></extra>",
-    )
-    fig_pie.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                           legend=dict(font=dict(color="#e2e8f0"), orientation="h"), font=dict(color="#e2e8f0"))
-    st.plotly_chart(fig_pie, use_container_width=True)
-
-    field_totals = wells_df.groupby("field")["bopd"].sum().reset_index()
-    fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h", color_discrete_sequence=["#38bdf8"])
-    fig_field.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                             font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title=None)
-    st.plotly_chart(fig_field, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # PRODUCTION TREND (real accumulated history)
