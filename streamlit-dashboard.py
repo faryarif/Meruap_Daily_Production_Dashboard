@@ -213,7 +213,7 @@ for col in ["injection_rate", "water_cut_pct", "last_test_date"]:
 col_title, col_filter = st.columns([3, 1])
 with col_title:
     st.title("Daily Production Dashboard")
-    st.caption("All units in BOPD (barrels of oil per day) · Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
+    st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
 with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].unique().tolist())
     field_filter = st.selectbox("Field", field_options)
@@ -243,9 +243,9 @@ if len(agg_history) >= 2:
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
 row1_c1.metric("Total Production", f"{total_bopd:,} BOPD", f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
-row1_c2.metric("Total Injection", f"{total_injection:,}")
-row1_c3.metric("Total Water Production", f"{total_water_production:,}")
-row1_c4.metric("Total Water Source", f"{total_water_source:,}")
+row1_c2.metric("Total Injection", f"{total_injection:,} Barrels")
+row1_c3.metric("Total Water Production", f"{total_water_production:,} BWPD")
+row1_c4.metric("Total Water Source", f"{total_water_source:,} BWPD")
 
 row2_c1, row2_c2, row2_c3, row2_c4, row2_c5 = st.columns(5)
 row2_c1.metric("Producing Wells", f"{active_count} / {len(filtered)}")
