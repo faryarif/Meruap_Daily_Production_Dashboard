@@ -31,15 +31,16 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Daily Production Dashboard", page_icon="🛢️", layout="wide")
 
 STATUS_COLORS = {
-    "Producing": "#22c55e",     # green
-    "Water Source": "#1e3a8a",  # dark blue
-    "Injector": "#3b82f6",      # blue
-    "Gas": "#f97316",           # orange
-    "Shut-in": "#ef4444",       # red
-    "Down": "#6b7280",          # gray — WO/WS (workover / well service)
+    "Producing": "#22c55e",      # green
+    "Water Source": "#1e3a8a",   # dark blue
+    "Injector": "#3b82f6",       # blue
+    "Gas": "#f97316",            # orange
+    "Shut-in": "#eab308",        # yellow
+    "Down": "#6b7280",           # gray — WO/WS (workover / well service)
+    "Plug Abandon": "#ef4444",   # red
 }
-REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "water_cut_pct", "last_test_date"]
-HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "water_cut_pct"]
+REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "injection_rate", "water_cut_pct", "last_test_date"]
+HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "injection_rate", "water_cut_pct"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -79,7 +80,7 @@ def read_current():
     if not records:
         return None
     df = pd.DataFrame(records)
-    for col in ["latitude", "longitude", "bopd", "water_cut_pct"]:
+    for col in ["latitude", "longitude", "bopd", "injection_rate", "water_cut_pct"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
@@ -92,7 +93,7 @@ def read_history():
     if not records:
         return pd.DataFrame(columns=HISTORY_COLS)
     df = pd.DataFrame(records)
-    for col in ["bopd", "water_cut_pct"]:
+    for col in ["bopd", "injection_rate", "water_cut_pct"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
@@ -108,7 +109,7 @@ def write_current(df: pd.DataFrame):
 def append_history(df: pd.DataFrame, date_str: str):
     sheet = get_sheet()
     ws = sheet.worksheet("history")
-    snapshot = df[["well_name", "field", "status", "bopd", "water_cut_pct"]].copy()
+    snapshot = df[["well_name", "field", "status", "bopd", "injection_rate", "water_cut_pct"]].copy()
     snapshot.insert(0, "date", date_str)
     existing = ws.get_all_values()
     rows = snapshot.astype(str).values.tolist()
@@ -137,6 +138,7 @@ def generate_sample_wells():
             "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
             "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
             "bopd": int(base_rate) if status == "Producing" else 0,
+            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "water_cut_pct": int(rng.integers(10, 60)),
             "last_test_date": "2026-06-23",
         })
@@ -175,8 +177,10 @@ if uploaded_file is not None:
 st.sidebar.markdown("---")
 with st.sidebar.expander("📋 Expected CSV format"):
     st.code(
-        "well_name,field,status,latitude,longitude,bopd,water_cut_pct,last_test_date\n"
-        "Hawk-1,North Block,Producing,-2.51,110.52,320,22,2026-06-22",
+        "well_name,field,status,latitude,longitude,bopd,injection_rate,water_cut_pct,last_test_date\n"
+        "Hawk-1,North Block,Producing,-2.51,110.52,320,0,22,2026-06-22\n"
+        "Heron-11,North Block,Injector,-2.49,110.53,0,180,0,2026-06-22\n"
+        "Heron-12,North Block,Water Source,-2.48,110.54,0,150,0,2026-06-22",
         language="csv",
     )
 
@@ -199,9 +203,9 @@ if using_sample:
     if sheet_connected:
         st.info("No data published yet — showing sample data. Upload a file in the sidebar and click 'Publish' to replace it for everyone.")
 
-for col in ["water_cut_pct", "last_test_date"]:
+for col in ["injection_rate", "water_cut_pct", "last_test_date"]:
     if col not in wells_df.columns:
-        wells_df[col] = "N/A"
+        wells_df[col] = "N/A" if col == "last_test_date" else 0
 
 # ----------------------------------------------------------------------------
 # HEADER
@@ -223,6 +227,8 @@ total_bopd = int(filtered["bopd"].sum())
 active_count = int((filtered["status"] == "Producing").sum())
 shutin_count = int((filtered["status"] == "Shut-in").sum())
 down_count = int((filtered["status"] == "Down").sum())
+injector_count = int((filtered["status"] == "Injector").sum())
+water_source_count = int((filtered["status"] == "Water Source").sum())
 
 agg_history = history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date") if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
 
@@ -232,11 +238,13 @@ if len(agg_history) >= 2:
     if prev:
         pct_change = round((curr - prev) / prev * 100, 1)
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("Total Production", f"{total_bopd:,} BOPD", f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
 c2.metric("Producing Wells", f"{active_count} / {len(filtered)}")
 c3.metric("Shut-in", shutin_count)
 c4.metric("Down", down_count)
+c5.metric("Injector Wells", injector_count)
+c6.metric("Water Source Wells", water_source_count)
 
 st.markdown("")
 
@@ -311,6 +319,29 @@ else:
     st.plotly_chart(fig_trend, use_container_width=True)
 
 # ----------------------------------------------------------------------------
+# INJECTION RATE TREND (Injector + Water Source wells)
+# ----------------------------------------------------------------------------
+st.subheader("Injection Rate Trend")
+if history_df.empty:
+    st.caption("No history yet — once you publish a few days of data, the injection trend will appear here.")
+else:
+    injection_history = history_df[history_df["status"].isin(["Injector", "Water Source"])]
+    if injection_history.empty:
+        st.caption("No Injector or Water Source wells found in the published data yet.")
+    else:
+        inj_by_date_status = injection_history.groupby(["date", "status"])["injection_rate"].sum().reset_index().sort_values("date")
+        fig_inj = px.line(
+            inj_by_date_status, x="date", y="injection_rate", color="status",
+            color_discrete_map=STATUS_COLORS, markers=True,
+        )
+        fig_inj.update_layout(
+            height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+            font=dict(color="#94a3b8"), xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="Injection Rate"),
+            legend=dict(font=dict(color="#e2e8f0"), orientation="h"),
+        )
+        st.plotly_chart(fig_inj, use_container_width=True)
+
+# ----------------------------------------------------------------------------
 # TOP PRODUCERS + REAL WELL DECLINE TREND
 # ----------------------------------------------------------------------------
 top_col, detail_col = st.columns(2)
@@ -340,8 +371,8 @@ with detail_col:
 # WELL TABLE
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
-display_df = filtered[["well_name", "field", "status", "bopd", "water_cut_pct", "last_test_date"]].rename(
-    columns={"well_name": "Well", "field": "Field", "status": "Status", "bopd": "BOPD",
+display_df = filtered[["well_name", "field", "status", "bopd", "injection_rate", "water_cut_pct", "last_test_date"]].rename(
+    columns={"well_name": "Well", "field": "Field", "status": "Status", "bopd": "BOPD", "injection_rate": "Injection Rate",
              "water_cut_pct": "Water Cut (%)", "last_test_date": "Last Test"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
