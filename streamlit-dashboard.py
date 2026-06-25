@@ -229,6 +229,9 @@ shutin_count = int((filtered["status"] == "Shut-in").sum())
 down_count = int((filtered["status"] == "Down").sum())
 injector_count = int((filtered["status"] == "Injector").sum())
 water_source_count = int((filtered["status"] == "Water Source").sum())
+total_injection = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
+total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "injection_rate"].sum())
+total_water_production = int((filtered["bopd"] * filtered["water_cut_pct"] / 100).sum())
 
 agg_history = history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date") if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
 
@@ -238,13 +241,18 @@ if len(agg_history) >= 2:
     if prev:
         pct_change = round((curr - prev) / prev * 100, 1)
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Total Production", f"{total_bopd:,} BOPD", f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
-c2.metric("Producing Wells", f"{active_count} / {len(filtered)}")
-c3.metric("Shut-in", shutin_count)
-c4.metric("Down", down_count)
-c5.metric("Injector Wells", injector_count)
-c6.metric("Water Source Wells", water_source_count)
+row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
+row1_c1.metric("Total Production", f"{total_bopd:,} BOPD", f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
+row1_c2.metric("Total Injection", f"{total_injection:,}")
+row1_c3.metric("Total Water Production", f"{total_water_production:,}")
+row1_c4.metric("Total Water Source", f"{total_water_source:,}")
+
+row2_c1, row2_c2, row2_c3, row2_c4, row2_c5 = st.columns(5)
+row2_c1.metric("Producing Wells", f"{active_count} / {len(filtered)}")
+row2_c2.metric("Injector Wells", injector_count)
+row2_c3.metric("Water Source Wells", water_source_count)
+row2_c4.metric("Shut-in", shutin_count)
+row2_c5.metric("Down", down_count)
 
 st.markdown("")
 
