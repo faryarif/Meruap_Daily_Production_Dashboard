@@ -86,6 +86,17 @@ def read_current():
     return df
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def read_current_cached():
+    df = read_current()
+    return df if df is None else df.to_json()
+
+
+def get_current_df():
+    cached = read_current_cached()
+    return None if cached is None else pd.read_json(cached)
+
+
 def read_history():
     sheet = get_sheet()
     ws = sheet.worksheet("history")
@@ -97,6 +108,16 @@ def read_history():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def read_history_cached():
+    df = read_history()
+    return df.to_json()
+
+
+def get_history_df():
+    return pd.read_json(read_history_cached())
 
 
 def write_current(df: pd.DataFrame):
@@ -156,8 +177,8 @@ def generate_sample_wells():
 # LOAD SHARED DATA (everyone who opens the app sees this)
 # ----------------------------------------------------------------------------
 try:
-    wells_df = read_current()
-    history_df = read_history()
+    wells_df = get_current_df()
+    history_df = get_history_df()
     sheet_connected = True
 except Exception as e:
     st.error(f"Couldn't connect to Google Sheet — check your secrets configuration. Details: {e}")
