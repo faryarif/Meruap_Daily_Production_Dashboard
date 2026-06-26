@@ -30,7 +30,7 @@ STATUS_COLORS = {
     "Injector": "#3b82f6",       # blue
     "Gas": "#f97316",            # orange
     "Shut-in": "#eab308",        # yellow
-    "Down": "#6b7280",           # gray — WO/WS (workover / well service)
+    "Down": "#6b7280",           # gray
     "Plug Abandon": "#ef4444",   # red
 }
 
@@ -57,17 +57,14 @@ h1, h2, h3 { color: #e2e8f0 !important; }
 # ----------------------------------------------------------------------------
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 
-
 @st.cache_resource
 def get_gsheet_client():
     creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
     return gspread.authorize(creds)
 
-
 def get_sheet():
     client = get_gsheet_client()
     return client.open_by_key(st.secrets["sheet"]["sheet_id"])
-
 
 def read_current():
     sheet = get_sheet()
@@ -81,7 +78,6 @@ def read_current():
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
-
 def read_locations():
     sheet = get_sheet()
     ws = sheet.worksheet("locations")
@@ -93,7 +89,6 @@ def read_locations():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
-
 
 def write_locations(df: pd.DataFrame):
     """Upserts well_name -> lat/lon into the 'locations' tab. Only writes
@@ -107,7 +102,6 @@ def write_locations(df: pd.DataFrame):
     ws.clear()
     ws.update([LOCATION_COLS] + merged[LOCATION_COLS].astype(str).values.tolist())
 
-
 def read_history():
     sheet = get_sheet()
     ws = sheet.worksheet("history")
@@ -120,13 +114,11 @@ def read_history():
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
-
 def write_current(df: pd.DataFrame):
     sheet = get_sheet()
     ws = sheet.worksheet("current")
     ws.clear()
     ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
-
 
 def validate_data(df: pd.DataFrame):
     errors = []
@@ -146,7 +138,6 @@ def validate_data(df: pd.DataFrame):
         errors.append("Missing well_name")
     return errors
 
-
 def append_history(df: pd.DataFrame, date_str: str):
     sheet = get_sheet()
     ws = sheet.worksheet("history")
@@ -158,49 +149,6 @@ def append_history(df: pd.DataFrame, date_str: str):
         ws.update([HISTORY_COLS] + rows)
     else:
         ws.append_rows(rows, value_input_option="RAW")
-
-
-# ----------------------------------------------------------------------------
-# SAMPLE DATA (fallback only — used if Sheet is empty and nothing uploaded yet)
-# ----------------------------------------------------------------------------
-@st.cache_data
-def generate_sample_wells():
-    rng = np.random.default_rng(42)
-    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    fields = ["North Block", "South Block", "East Flank"]
-    rows = []
-    for i, name in enumerate(names):
-        base_rate = rng.integers(80, 500)
-        roll = rng.random()
-        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
-        water_cut = int(rng.integers(10, 60))
-        bopd_val = int(base_rate) if status == "Oil" else 0
-        rows.append({
-            "well_name": name, "field": fields[i % 3], "status": status,
-            "bopd": bopd_val,
-            "bwpd": int(bopd_val * water_cut / 100) if status == "Oil" else 0,
-            "water_cut_pct": water_cut,
-            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
-            "last_test_date": "2026-06-23",
-        })
-    return pd.DataFrame(rows)
-
-
-@st.cache_data
-def generate_sample_locations():
-    rng = np.random.default_rng(42)
-    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    rows = []
-    for i, name in enumerate(names):
-        rows.append({
-            "well_name": name,
-            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
-            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
-        })
-    return pd.DataFrame(rows)
-
 
 # ----------------------------------------------------------------------------
 # (Read-only dashboard — data is managed directly in the Google Sheet)
