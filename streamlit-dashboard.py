@@ -159,8 +159,6 @@ uploaded_file = st.sidebar.file_uploader(
     help="Required columns: " + ", ".join(REQUIRED_COLS),
 )
 
-snapshot_date = st.sidebar.date_input("Snapshot date", value=datetime(2026, 6, 23))
-
 if uploaded_file is not None:
     new_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
     missing = set(REQUIRED_COLS) - set(new_df.columns)
@@ -213,10 +211,12 @@ for col in ["bwpd", "injection_rate", "water_cut_pct", "last_test_date"]:
 # ----------------------------------------------------------------------------
 # HEADER
 # ----------------------------------------------------------------------------
-col_title, col_filter = st.columns([3, 1])
+col_title, col_date, col_filter = st.columns([3, 1, 1])
 with col_title:
     st.title("Daily Production Dashboard")
     st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
+with col_date:
+    snapshot_date = st.date_input("Snapshot date", value=datetime(2026, 6, 23))
 with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].unique().tolist())
     field_filter = st.selectbox("Field", field_options)
