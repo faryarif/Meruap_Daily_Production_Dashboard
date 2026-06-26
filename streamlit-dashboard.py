@@ -8,11 +8,6 @@ Setup (one-time):
     1. A Google Sheet with two tabs: "current" and "history"
     2. A Google service account with Editor access to that sheet
     3. Streamlit secrets configured with the service account + sheet_id
-
-Daily workflow:
-    Upload a CSV/Excel in the sidebar -> it overwrites the "current" tab
-    AND appends a snapshot to the "history" tab. Anyone who opens the app
-    link sees the same shared data immediately (no upload needed on their end).
 """
 
 import streamlit as st
@@ -208,57 +203,8 @@ def generate_sample_locations():
 
 
 # ----------------------------------------------------------------------------
-# SIDEBAR — UPLOAD (writes to shared Google Sheet)
+# (Read-only dashboard — data is managed directly in the Google Sheet)
 # ----------------------------------------------------------------------------
-st.sidebar.title("🛢️ Data Input")
-st.sidebar.markdown("Upload today's well data — this updates the **shared dashboard** for everyone.")
-
-uploaded_file = st.sidebar.file_uploader(
-    "Upload daily well file", type=["csv", "xlsx", "xls"],
-    help="Required columns: " + ", ".join(REQUIRED_COLS),
-)
-
-if uploaded_file is not None:
-    new_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
-    missing = set(REQUIRED_COLS) - set(new_df.columns)
-    if missing:
-        st.sidebar.error(f"Missing required columns: {missing}")
-    else:
-        validation_errors = validate_data(new_df)
-        if validation_errors:
-            st.sidebar.error("Data validation failed:\n\n" + "\n".join(f"- {e}" for e in validation_errors))
-        else:
-            has_coords = "latitude" in new_df.columns and "longitude" in new_df.columns
-            if st.sidebar.button("📤 Publish to shared dashboard", type="primary"):
-                try:
-                    write_current(new_df[REQUIRED_COLS])
-                    append_history(new_df, snapshot_date.strftime("%Y-%m-%d"))
-                    if has_coords:
-                        coords_df = new_df.dropna(subset=["latitude", "longitude"])[["well_name", "latitude", "longitude"]]
-                        if not coords_df.empty:
-                            write_locations(coords_df)
-                    st.cache_data.clear()
-                    st.sidebar.success("Published! Everyone with the link now sees this data.")
-                    st.rerun()
-                except Exception as e:
-                    st.sidebar.error(f"Couldn't write to Google Sheet: {e}")
-
-st.sidebar.markdown("---")
-with st.sidebar.expander("📋 Expected CSV format"):
-    st.markdown("**Daily file** (no coordinates needed — these are looked up automatically):")
-    st.code(
-        "well_name,field,status,bopd,bwpd,water_cut_pct,injection_rate,last_test_date\n"
-        "Hawk-1,North Block,Oil,320,90,22,0,2026-06-22\n"
-        "Heron-11,North Block,Injector,0,0,0,180,2026-06-22\n"
-        "Heron-12,North Block,Water Source,0,0,0,150,2026-06-22",
-        language="csv",
-    )
-    st.markdown("**First time only** (registering a new well's coordinates) — add `latitude` and `longitude` columns to your file just once; they'll be saved permanently and you can drop them from future uploads:")
-    st.code(
-        "well_name,field,status,bopd,bwpd,water_cut_pct,injection_rate,last_test_date,latitude,longitude\n"
-        "Hawk-1,North Block,Oil,320,90,22,0,2026-06-22,-2.51,110.52",
-        language="csv",
-    )
 
 # ----------------------------------------------------------------------------
 # LOAD SHARED DATA (everyone who opens the app sees this)
@@ -298,12 +244,10 @@ if missing_coords.any() and not using_sample:
 # ----------------------------------------------------------------------------
 # HEADER
 # ----------------------------------------------------------------------------
-col_title, col_date, col_filter = st.columns([3, 1, 1])
+col_title, col_filter = st.columns([4, 1])
 with col_title:
     st.title("Daily Production Dashboard")
     st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
-with col_date:
-    snapshot_date = st.date_input("Snapshot date", value=datetime(2026, 6, 23))
 with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].unique().tolist())
     field_filter = st.selectbox("Field", field_options)
