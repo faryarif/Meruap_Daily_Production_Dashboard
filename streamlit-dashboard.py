@@ -106,6 +106,27 @@ def write_current(df: pd.DataFrame):
     ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
 
 
+def validate_data(df: pd.DataFrame):
+    errors = []
+    if (df["bopd"] < 0).any():
+        errors.append("BOPD cannot be negative")
+    if (~df["water_cut_pct"].between(0, 100)).any():
+        errors.append("Water cut must be 0–100%")
+    if df["latitude"].isna().any() or df["longitude"].isna().any():
+        errors.append("Missing coordinates")
+    if (df["bwpd"] < 0).any():
+        errors.append("BWPD cannot be negative")
+    if (df["injection_rate"] < 0).any():
+        errors.append("Injection rate cannot be negative")
+    valid_statuses = set(STATUS_COLORS.keys())
+    bad_statuses = set(df["status"].unique()) - valid_statuses
+    if bad_statuses:
+        errors.append(f"Unrecognized status value(s): {', '.join(sorted(bad_statuses))} — expected one of {', '.join(valid_statuses)}")
+    if df["well_name"].isna().any() or (df["well_name"].astype(str).str.strip() == "").any():
+        errors.append("Missing well_name")
+    return errors
+
+
 def append_history(df: pd.DataFrame, date_str: str):
     sheet = get_sheet()
     ws = sheet.worksheet("history")
@@ -165,15 +186,19 @@ if uploaded_file is not None:
     if missing:
         st.sidebar.error(f"Missing required columns: {missing}")
     else:
-        if st.sidebar.button("📤 Publish to shared dashboard", type="primary"):
-            try:
-                write_current(new_df[REQUIRED_COLS])
-                append_history(new_df, snapshot_date.strftime("%Y-%m-%d"))
-                st.cache_data.clear()
-                st.sidebar.success("Published! Everyone with the link now sees this data.")
-                st.rerun()
-            except Exception as e:
-                st.sidebar.error(f"Couldn't write to Google Sheet: {e}")
+        validation_errors = validate_data(new_df)
+        if validation_errors:
+            st.sidebar.error("Data validation failed:\n\n" + "\n".join(f"- {e}" for e in validation_errors))
+        else:
+            if st.sidebar.button("📤 Publish to shared dashboard", type="primary"):
+                try:
+                    write_current(new_df[REQUIRED_COLS])
+                    append_history(new_df, snapshot_date.strftime("%Y-%m-%d"))
+                    st.cache_data.clear()
+                    st.sidebar.success("Published! Everyone with the link now sees this data.")
+                    st.rerun()
+                except Exception as e:
+                    st.sidebar.error(f"Couldn't write to Google Sheet: {e}")
 
 st.sidebar.markdown("---")
 with st.sidebar.expander("📋 Expected CSV format"):
