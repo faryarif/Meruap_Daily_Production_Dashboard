@@ -86,17 +86,6 @@ def read_current():
     return df
 
 
-@st.cache_data(ttl=30, show_spinner=False)
-def read_current_cached():
-    df = read_current()
-    return df if df is None else df.to_json()
-
-
-def get_current_df():
-    cached = read_current_cached()
-    return None if cached is None else pd.read_json(cached)
-
-
 def read_history():
     sheet = get_sheet()
     ws = sheet.worksheet("history")
@@ -108,16 +97,6 @@ def read_history():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
-
-
-@st.cache_data(ttl=30, show_spinner=False)
-def read_history_cached():
-    df = read_history()
-    return df.to_json()
-
-
-def get_history_df():
-    return pd.read_json(read_history_cached())
 
 
 def write_current(df: pd.DataFrame):
@@ -170,15 +149,50 @@ def generate_sample_wells():
 
 
 # ----------------------------------------------------------------------------
-# SIDEBAR — (data is published separately via Google Sheets; see README)
+# SIDEBAR — UPLOAD (writes to shared Google Sheet)
 # ----------------------------------------------------------------------------
+st.sidebar.title("🛢️ Data Input")
+st.sidebar.markdown("Upload today's well data — this updates the **shared dashboard** for everyone.")
+
+uploaded_file = st.sidebar.file_uploader(
+    "Upload daily well file", type=["csv", "xlsx", "xls"],
+    help="Required columns: " + ", ".join(REQUIRED_COLS),
+)
+
+snapshot_date = st.sidebar.date_input("Snapshot date", value=datetime(2026, 6, 23))
+
+if uploaded_file is not None:
+    new_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith(".csv") else pd.read_excel(uploaded_file)
+    missing = set(REQUIRED_COLS) - set(new_df.columns)
+    if missing:
+        st.sidebar.error(f"Missing required columns: {missing}")
+    else:
+        if st.sidebar.button("📤 Publish to shared dashboard", type="primary"):
+            try:
+                write_current(new_df[REQUIRED_COLS])
+                append_history(new_df, snapshot_date.strftime("%Y-%m-%d"))
+                st.cache_data.clear()
+                st.sidebar.success("Published! Everyone with the link now sees this data.")
+                st.rerun()
+            except Exception as e:
+                st.sidebar.error(f"Couldn't write to Google Sheet: {e}")
+
+st.sidebar.markdown("---")
+with st.sidebar.expander("📋 Expected CSV format"):
+    st.code(
+        "well_name,field,status,latitude,longitude,bopd,bwpd,water_cut_pct,injection_rate,last_test_date\n"
+        "Hawk-1,North Block,Oil,-2.51,110.52,320,90,22,0,2026-06-22\n"
+        "Heron-11,North Block,Injector,-2.49,110.53,0,0,0,180,2026-06-22\n"
+        "Heron-12,North Block,Water Source,-2.48,110.54,0,0,0,150,2026-06-22",
+        language="csv",
+    )
 
 # ----------------------------------------------------------------------------
 # LOAD SHARED DATA (everyone who opens the app sees this)
 # ----------------------------------------------------------------------------
 try:
-    wells_df = get_current_df()
-    history_df = get_history_df()
+    wells_df = read_current()
+    history_df = read_history()
     sheet_connected = True
 except Exception as e:
     st.error(f"Couldn't connect to Google Sheet — check your secrets configuration. Details: {e}")
@@ -199,12 +213,10 @@ for col in ["bwpd", "injection_rate", "water_cut_pct", "last_test_date"]:
 # ----------------------------------------------------------------------------
 # HEADER
 # ----------------------------------------------------------------------------
-col_title, col_date, col_filter = st.columns([3, 1, 1])
+col_title, col_filter = st.columns([3, 1])
 with col_title:
     st.title("Daily Production Dashboard")
     st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
-with col_date:
-    snapshot_date = st.date_input("Snapshot date", value=datetime(2026, 6, 23))
 with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].unique().tolist())
     field_filter = st.selectbox("Field", field_options)
