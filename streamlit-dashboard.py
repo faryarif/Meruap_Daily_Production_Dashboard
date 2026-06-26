@@ -151,8 +151,44 @@ def append_history(df: pd.DataFrame, date_str: str):
         ws.append_rows(rows, value_input_option="RAW")
 
 # ----------------------------------------------------------------------------
-# (Read-only dashboard — data is managed directly in the Google Sheet)
+# SAMPLE DATA (fallback only — used if Sheet/tab is empty)
 # ----------------------------------------------------------------------------
+@st.cache_data
+def generate_sample_wells():
+    rng = np.random.default_rng(42)
+    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
+              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    fields = ["North Block", "South Block", "East Flank"]
+    rows = []
+    for i, name in enumerate(names):
+        base_rate = rng.integers(80, 500)
+        roll = rng.random()
+        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
+        water_cut = int(rng.integers(10, 60))
+        bopd_val = int(base_rate) if status == "Oil" else 0
+        rows.append({
+            "well_name": name, "field": fields[i % 3], "status": status,
+            "bopd": bopd_val,
+            "bwpd": int(bopd_val * water_cut / 100) if status == "Oil" else 0,
+            "water_cut_pct": water_cut,
+            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
+            "last_test_date": "2026-06-23",
+        })
+    return pd.DataFrame(rows)
+
+@st.cache_data
+def generate_sample_locations():
+    rng = np.random.default_rng(42)
+    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
+              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    rows = []
+    for i, name in enumerate(names):
+        rows.append({
+            "well_name": name,
+            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
+            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
+        })
+    return pd.DataFrame(rows)
 
 # ----------------------------------------------------------------------------
 # LOAD SHARED DATA (everyone who opens the app sees this)
