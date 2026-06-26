@@ -359,9 +359,15 @@ with pie_col:
     st.plotly_chart(fig_pie, use_container_width=True)
 
     field_totals = wells_df.groupby("field")["bopd"].sum().reset_index()
+    field_order = ["North", "South", "East", "West"]
+    field_totals["sort_key"] = field_totals["field"].apply(
+        lambda f: next((i for i, k in enumerate(field_order) if k.lower() in f.lower()), len(field_order))
+    )
+    field_totals = field_totals.sort_values("sort_key").drop(columns="sort_key")
     fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h", color_discrete_sequence=["#38bdf8"])
     fig_field.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                             font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title=None)
+                             font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title=None,
+                             yaxis=dict(categoryorder="array", categoryarray=field_totals["field"].tolist()[::-1]))
     st.plotly_chart(fig_field, use_container_width=True)
 
 with map_col:
