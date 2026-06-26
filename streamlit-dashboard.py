@@ -39,8 +39,9 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",   # red
 }
 
-REQUIRED_COLS = ["well_name", "field", "status", "latitude", "longitude", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]
+REQUIRED_COLS = ["well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]
 HISTORY_COLS = ["date", "well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate"]
+LOCATION_COLS = ["well_name", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -80,10 +81,36 @@ def read_current():
     if not records:
         return None
     df = pd.DataFrame(records)
-    for col in ["latitude", "longitude", "bopd", "bwpd", "water_cut_pct", "injection_rate"]:
+    for col in ["bopd", "bwpd", "water_cut_pct", "injection_rate"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
+
+
+def read_locations():
+    sheet = get_sheet()
+    ws = sheet.worksheet("locations")
+    records = ws.get_all_records()
+    if not records:
+        return pd.DataFrame(columns=LOCATION_COLS)
+    df = pd.DataFrame(records)
+    for col in ["latitude", "longitude"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def write_locations(df: pd.DataFrame):
+    """Upserts well_name -> lat/lon into the 'locations' tab. Only writes
+    wells that are new or whose coordinates changed, so existing rows aren't
+    needlessly rewritten."""
+    sheet = get_sheet()
+    ws = sheet.worksheet("locations")
+    existing = read_locations()
+    incoming = df[LOCATION_COLS].drop_duplicates(subset="well_name")
+    merged = pd.concat([existing, incoming]).drop_duplicates(subset="well_name", keep="last")
+    ws.clear()
+    ws.update([LOCATION_COLS] + merged[LOCATION_COLS].astype(str).values.tolist())
 
 
 def read_history():
@@ -112,8 +139,6 @@ def validate_data(df: pd.DataFrame):
         errors.append("BOPD cannot be negative")
     if (~df["water_cut_pct"].between(0, 100)).any():
         errors.append("Water cut must be 0–100%")
-    if df["latitude"].isna().any() or df["longitude"].isna().any():
-        errors.append("Missing coordinates")
     if (df["bwpd"] < 0).any():
         errors.append("BWPD cannot be negative")
     if (df["injection_rate"] < 0).any():
@@ -158,13 +183,26 @@ def generate_sample_wells():
         bopd_val = int(base_rate) if status == "Oil" else 0
         rows.append({
             "well_name": name, "field": fields[i % 3], "status": status,
-            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
-            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
             "bopd": bopd_val,
             "bwpd": int(bopd_val * water_cut / 100) if status == "Oil" else 0,
             "water_cut_pct": water_cut,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
+        })
+    return pd.DataFrame(rows)
+
+
+@st.cache_data
+def generate_sample_locations():
+    rng = np.random.default_rng(42)
+    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
+              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    rows = []
+    for i, name in enumerate(names):
+        rows.append({
+            "well_name": name,
+            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
+            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
         })
     return pd.DataFrame(rows)
 
@@ -190,10 +228,15 @@ if uploaded_file is not None:
         if validation_errors:
             st.sidebar.error("Data validation failed:\n\n" + "\n".join(f"- {e}" for e in validation_errors))
         else:
+            has_coords = "latitude" in new_df.columns and "longitude" in new_df.columns
             if st.sidebar.button("📤 Publish to shared dashboard", type="primary"):
                 try:
                     write_current(new_df[REQUIRED_COLS])
                     append_history(new_df, snapshot_date.strftime("%Y-%m-%d"))
+                    if has_coords:
+                        coords_df = new_df.dropna(subset=["latitude", "longitude"])[["well_name", "latitude", "longitude"]]
+                        if not coords_df.empty:
+                            write_locations(coords_df)
                     st.cache_data.clear()
                     st.sidebar.success("Published! Everyone with the link now sees this data.")
                     st.rerun()
@@ -202,11 +245,18 @@ if uploaded_file is not None:
 
 st.sidebar.markdown("---")
 with st.sidebar.expander("📋 Expected CSV format"):
+    st.markdown("**Daily file** (no coordinates needed — these are looked up automatically):")
     st.code(
-        "well_name,field,status,latitude,longitude,bopd,bwpd,water_cut_pct,injection_rate,last_test_date\n"
-        "Hawk-1,North Block,Oil,-2.51,110.52,320,90,22,0,2026-06-22\n"
-        "Heron-11,North Block,Injector,-2.49,110.53,0,0,0,180,2026-06-22\n"
-        "Heron-12,North Block,Water Source,-2.48,110.54,0,0,0,150,2026-06-22",
+        "well_name,field,status,bopd,bwpd,water_cut_pct,injection_rate,last_test_date\n"
+        "Hawk-1,North Block,Oil,320,90,22,0,2026-06-22\n"
+        "Heron-11,North Block,Injector,0,0,0,180,2026-06-22\n"
+        "Heron-12,North Block,Water Source,0,0,0,150,2026-06-22",
+        language="csv",
+    )
+    st.markdown("**First time only** (registering a new well's coordinates) — add `latitude` and `longitude` columns to your file just once; they'll be saved permanently and you can drop them from future uploads:")
+    st.code(
+        "well_name,field,status,bopd,bwpd,water_cut_pct,injection_rate,last_test_date,latitude,longitude\n"
+        "Hawk-1,North Block,Oil,320,90,22,0,2026-06-22,-2.51,110.52",
         language="csv",
     )
 
@@ -216,22 +266,34 @@ with st.sidebar.expander("📋 Expected CSV format"):
 try:
     wells_df = read_current()
     history_df = read_history()
+    locations_df = read_locations()
     sheet_connected = True
 except Exception as e:
     st.error(f"Couldn't connect to Google Sheet — check your secrets configuration. Details: {e}")
     wells_df = None
     history_df = pd.DataFrame(columns=HISTORY_COLS)
+    locations_df = pd.DataFrame(columns=LOCATION_COLS)
     sheet_connected = False
 
 using_sample = wells_df is None or wells_df.empty
 if using_sample:
     wells_df = generate_sample_wells()
+    locations_df = generate_sample_locations()
     if sheet_connected:
         st.info("No data published yet — showing sample data. Upload a file in the sidebar and click 'Publish' to replace it for everyone.")
 
 for col in ["bwpd", "injection_rate", "water_cut_pct", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
+
+wells_df = wells_df.merge(locations_df, on="well_name", how="left")
+missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
+if missing_coords.any() and not using_sample:
+    st.warning(
+        "These wells have no saved coordinates yet, so they won't appear on the map: "
+        + ", ".join(wells_df.loc[missing_coords, "well_name"].tolist())
+        + ". Include latitude/longitude columns for them once in any upload to register their location."
+    )
 
 # ----------------------------------------------------------------------------
 # HEADER
@@ -304,9 +366,10 @@ with pie_col:
 
 with map_col:
     st.subheader("Well Map")
+    mappable = filtered.dropna(subset=["latitude", "longitude"])
     fig_map = px.scatter_map(
-        filtered, lat="latitude", lon="longitude", color="status",
-        color_discrete_map=STATUS_COLORS, size=[18] * len(filtered), size_max=14,
+        mappable, lat="latitude", lon="longitude", color="status",
+        color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
         hover_name="well_name",
         hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
         text="well_name", map_style="open-street-map",
@@ -324,10 +387,11 @@ with map_col:
             }],
         ),
     )
-    fig_map.update_maps(bounds=dict(
-        west=filtered["longitude"].min() - 0.01, east=filtered["longitude"].max() + 0.01,
-        south=filtered["latitude"].min() - 0.01, north=filtered["latitude"].max() + 0.01,
-    ))
+    if not mappable.empty:
+        fig_map.update_maps(bounds=dict(
+            west=mappable["longitude"].min() - 0.01, east=mappable["longitude"].max() + 0.01,
+            south=mappable["latitude"].min() - 0.01, north=mappable["latitude"].max() + 0.01,
+        ))
     st.plotly_chart(fig_map, use_container_width=True)
     st.caption("Basemap: Esri World Imagery (free satellite, no API key).")
 
