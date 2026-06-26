@@ -22,7 +22,7 @@ from google.oauth2.service_account import Credentials
 # ----------------------------------------------------------------------------
 # PAGE CONFIG
 # ----------------------------------------------------------------------------
-st.set_page_config(page_title="Daily Production Dashboard", page_icon="🛢️", layout="wide")
+st.set_page_config(page_title="Meruap Dashboard", page_icon="🛢️", layout="wide")
 
 STATUS_COLORS = {
     "Oil": "#22c55e",            # green
