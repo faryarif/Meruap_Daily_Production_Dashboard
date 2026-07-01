@@ -346,14 +346,13 @@ else:
 
     trend_tab1, trend_tab2, trend_tab3, trend_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
 
-    def make_trend_fig(y_col, color, title, y_title):
+    def make_trend_fig(y_col, line_color, fill_color, y_title):
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg[y_col],
             mode="lines", fill="tozeroy",
-            line=dict(color=color, width=2),
-            fillcolor=color.replace(")", ", 0.2)").replace("rgb", "rgba") if "rgb" in color
-                      else color + "33",
+            line=dict(color=line_color, width=2),
+            fillcolor=fill_color,
         ))
         fig.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
@@ -364,11 +363,11 @@ else:
         return fig
 
     with trend_tab1:
-        st.plotly_chart(make_trend_fig("bopd", "#38bdf8", "BOPD", "BOPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bopd", "#38bdf8", "rgba(56,189,248,0.2)",  "BOPD"), use_container_width=True)
     with trend_tab2:
-        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "BFPD", "BFPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
     with trend_tab3:
-        st.plotly_chart(make_trend_fig("bwpd", "#f59e0b", "BWPD", "BWPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bwpd", "#f59e0b", "rgba(245,158,11,0.2)",  "BWPD"), use_container_width=True)
     with trend_tab4:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
