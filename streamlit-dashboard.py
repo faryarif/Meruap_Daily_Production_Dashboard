@@ -202,15 +202,43 @@ if missing_coords.any() and not using_sample:
 # ----------------------------------------------------------------------------
 # HEADER
 # ----------------------------------------------------------------------------
-col_title, col_filter = st.columns([4, 1])
+col_title, col_date, col_filter = st.columns([3, 1, 1])
 with col_title:
     st.title("Daily Production Dashboard")
     st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
+with col_date:
+    available_dates = sorted(history_df["date"].unique(), reverse=True) if not history_df.empty else []
+    if available_dates:
+        available_dates_dt = [datetime.strptime(d, "%Y-%m-%d").date() for d in available_dates]
+        selected_date = st.date_input(
+            "Snapshot date",
+            value=available_dates_dt[0],
+            min_value=available_dates_dt[-1],
+            max_value=available_dates_dt[0],
+        )
+        selected_date_str = selected_date.strftime("%Y-%m-%d")
+    else:
+        selected_date_str = None
 with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].dropna().unique().tolist())
     field_filter = st.selectbox("Field", field_options)
 
-filtered = wells_df if field_filter == "All" else wells_df[wells_df["field"] == field_filter]
+# Filter wells_df to selected snapshot date
+if selected_date_str and not history_df.empty and selected_date_str in history_df["date"].values:
+    snap_df = history_df[history_df["date"] == selected_date_str].drop(columns=["date"]).reset_index(drop=True)
+    for col in ["injection_rate", "last_test_date"]:
+        if col not in snap_df.columns:
+            snap_df[col] = "N/A" if col == "last_test_date" else 0
+    snap_df = snap_df.merge(locations_df, on="well_name", how="left")
+    snap_df["bwpd"] = (snap_df["bfpd"] - snap_df["bopd"]).clip(lower=0)
+    snap_df["water_cut_pct"] = (
+        snap_df["bwpd"] / snap_df["bfpd"].replace(0, np.nan) * 100
+    ).round(1).fillna(0)
+    display_wells = snap_df
+else:
+    display_wells = wells_df
+
+filtered = display_wells if field_filter == "All" else display_wells[display_wells["field"] == field_filter]
 
 # ----------------------------------------------------------------------------
 # SUMMARY METRICS
