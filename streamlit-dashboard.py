@@ -220,7 +220,8 @@ if len(agg_history) >= 2:
         pct_change = round((curr - prev) / prev * 100, 1)
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
-row1_c1.metric("Total Production",      f"{total_bopd:,} BOPD",    f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
+row1_c1.metric("Total Production",       f"{total_bopd:,} BOPD",
+    f"{bopd_change:+,} BOPD vs yesterday" if bopd_change is not None else None)
 row1_c2.metric("Total Injection",       f"{total_injection:,} Barrels")
 row1_c3.metric("Total Water Production",f"{total_water_production:,} BWPD")
 row1_c4.metric("Total Water Source",    f"{total_water_source:,} BWPD")
