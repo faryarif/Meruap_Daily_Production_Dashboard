@@ -2,20 +2,19 @@
 Daily Production & Well Map Dashboard — Shared via Supabase
 ------------------------------------------------------------------
 Run locally:
-    pip install streamlit pandas plotly numpy supabase
+    pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - data      : id, date, well_name, status, bfpd, bopd, injection_rate, last_test_date
+    - well_data : id, date, well_name, status, bfpd, bopd, injection_rate, last_test_date
     - locations : well_name, field, latitude, longitude
 
-Streamlit secrets (in .streamlit/secrets.toml or Streamlit Cloud):
+Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
     url = "https://xxxx.supabase.co"
     key = "your-anon-public-key"
 
 Daily workflow:
-    Insert new rows into the 'data' table with today's date via Supabase
-    Table Editor, CSV import, or any SQL client.
+    Drag & drop Excel/CSV in the sidebar → validates → appends to well_data table.
     The app auto-treats the latest date as "current" and all rows as history.
 """
 
@@ -73,14 +72,16 @@ def get_supabase():
     )
 
 def test_connection():
-    """Quick connection test — returns (ok, message)."""
     try:
         client = get_supabase()
-        resp = client.table("well_data").select("well_name").limit(1).execute()
+        client.table("well_data").select("well_name").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
 
+# ----------------------------------------------------------------------------
+# READ FUNCTIONS
+# ----------------------------------------------------------------------------
 @st.cache_data(ttl=30, show_spinner=False)
 def read_data():
     client = get_supabase()
@@ -97,11 +98,25 @@ def read_data():
     current_df = df[df["date"] == latest_date].drop(columns=["date"]).reset_index(drop=True)
     return current_df, df
 
+@st.cache_data(ttl=30, show_spinner=False)
+def read_locations():
+    client = get_supabase()
+    resp = client.table("locations").select(
+        "well_name, field, latitude, longitude"
+    ).execute()
+    if not resp.data:
+        return pd.DataFrame(columns=LOCATION_COLS)
+    df = pd.DataFrame(resp.data)
+    for col in ["latitude", "longitude"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+# ----------------------------------------------------------------------------
+# ETL — WRITE + VALIDATE
+# ----------------------------------------------------------------------------
 def write_well_data(df: pd.DataFrame):
-    """Appends rows to the well_data table in Supabase."""
     client = get_supabase()
     rows = df.to_dict(orient="records")
-    # Convert any NaN/NaT to None for JSON compatibility
     clean_rows = []
     for row in rows:
         clean_rows.append({
@@ -111,14 +126,13 @@ def write_well_data(df: pd.DataFrame):
         })
     client.table("well_data").insert(clean_rows).execute()
 
-
 def validate_etl(df: pd.DataFrame):
     errors = []
     required = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
     missing = set(required) - set(df.columns)
     if missing:
         errors.append(f"Missing columns: {', '.join(sorted(missing))}")
-        return errors  # stop early
+        return errors
     if df["well_name"].isna().any() or (df["well_name"].astype(str).str.strip() == "").any():
         errors.append("Some rows have empty well_name")
     if df["date"].isna().any():
@@ -132,16 +146,6 @@ def validate_etl(df: pd.DataFrame):
     if bad:
         errors.append(f"Unrecognized status: {', '.join(sorted(bad))}")
     return errors
-    client = get_supabase()
-    resp = client.table("locations").select(
-        "well_name, field, latitude, longitude"
-    ).execute()
-    if not resp.data:
-        return pd.DataFrame(columns=LOCATION_COLS)
-    df = pd.DataFrame(resp.data)
-    for col in ["latitude", "longitude"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
 
 # ----------------------------------------------------------------------------
 # SAMPLE DATA
@@ -179,98 +183,85 @@ def generate_sample_locations():
              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
     fields = ["North Block", "South Block", "East Flank"]
     return pd.DataFrame([{
-        "well_name": name,
-        "field": fields[i % 3],
+        "well_name": name, "field": fields[i % 3],
         "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
         "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
     } for i, name in enumerate(names)])
 
-# Quick connection test shown in sidebar for debugging
+# ----------------------------------------------------------------------------
+# SIDEBAR — CONNECTION STATUS + ETL
+# ----------------------------------------------------------------------------
 with st.sidebar:
     ok, msg = test_connection()
     if ok:
         st.success("✅ Supabase connected")
     else:
-        st.error(f"❌ Supabase error: {msg}")
+        st.error(f"❌ {msg}")
 
     st.markdown("---")
     st.markdown("### 📥 ETL — Upload Daily Data")
     st.markdown("Drop an Excel or CSV file to append to the database.")
 
     uploaded = st.file_uploader(
-        "Drag & drop file here",
-        type=["xlsx", "xls", "csv"],
+        "Drag & drop file here", type=["xlsx", "xls", "csv"],
         label_visibility="collapsed",
     )
 
     if uploaded:
         try:
             raw = pd.read_csv(uploaded) if uploaded.name.endswith(".csv") else pd.read_excel(uploaded)
-            st.markdown(f"**{len(raw)} rows detected** from `{uploaded.name}`")
+            st.markdown(f"**{len(raw)} rows** from `{uploaded.name}`")
 
-            # ---- TRANSFORM ----
-            # Normalise column names
+            # Transform
             raw.columns = raw.columns.str.strip().str.lower().str.replace(" ", "_")
-            # Parse date
             raw["date"] = pd.to_datetime(raw["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-            # Numeric coerce
             for col in ["bfpd", "bopd", "injection_rate"]:
                 if col in raw.columns:
                     raw[col] = pd.to_numeric(raw[col], errors="coerce").fillna(0)
-            # Derive bwpd and water_cut_pct (not stored, just shown in preview)
             raw["bwpd"] = (raw["bfpd"] - raw["bopd"]).clip(lower=0)
             raw["water_cut_pct"] = (
                 raw["bwpd"] / raw["bfpd"].replace(0, np.nan) * 100
             ).round(1).fillna(0)
 
-            # ---- VALIDATE ----
+            # Validate
             errors = validate_etl(raw)
             if errors:
                 for e in errors:
                     st.error(f"❌ {e}")
             else:
                 st.success("✅ Validation passed")
-
-                # Preview
                 with st.expander("Preview data", expanded=False):
                     st.dataframe(
                         raw[["date", "well_name", "status", "bfpd", "bopd",
                              "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]],
                         use_container_width=True, hide_index=True
                     )
-
-                # Check for duplicate dates already in DB
-                if not history_df.empty:
-                    existing_dates = set(history_df["date"].unique())
+                try:
+                    existing_dates = set(pd.read_csv if False else [])  # placeholder
+                    hist_resp = get_supabase().table("well_data").select("date").execute()
+                    existing_dates = set(r["date"] for r in hist_resp.data) if hist_resp.data else set()
                     incoming_dates = set(raw["date"].dropna().unique())
                     overlap = existing_dates & incoming_dates
                     if overlap:
-                        st.warning(
-                            f"⚠️ These dates already exist in the database: "
-                            f"{', '.join(sorted(overlap))}. "
-                            f"Appending will create duplicate rows for those dates."
-                        )
+                        st.warning(f"⚠️ Dates already in DB: {', '.join(sorted(overlap))}. Appending will create duplicates.")
+                except Exception:
+                    pass
 
                 if st.button("📤 Append to Supabase", type="primary", use_container_width=True):
                     try:
-                        insert_cols = ["date", "well_name", "status", "bfpd",
-                                       "bopd", "injection_rate", "last_test_date"]
-                        write_well_data(raw[insert_cols])
+                        write_well_data(raw[DATA_COLS])
                         st.cache_data.clear()
-                        st.success(f"✅ {len(raw)} rows appended successfully!")
+                        st.success(f"✅ {len(raw)} rows appended!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Failed to write to Supabase: {e}")
+                        st.error(f"Write failed: {e}")
 
         except Exception as e:
             st.error(f"Could not read file: {e}")
 
     st.markdown("---")
     st.markdown("**Expected columns:**")
-    st.code(
-        "date, well_name, status,\nbfpd, bopd, injection_rate,\nlast_test_date",
-        language="text"
-    )
+    st.code("date, well_name, status,\nbfpd, bopd, injection_rate,\nlast_test_date", language="text")
 
 # ----------------------------------------------------------------------------
 # LOAD DATA
@@ -291,7 +282,7 @@ if using_sample:
     wells_df, history_df = generate_sample_data()
     locations_df = generate_sample_locations()
     if db_connected:
-        st.info("No data yet — showing sample data. Insert rows into the 'well_data' table in Supabase.")
+        st.info("No data yet — showing sample data. Upload a file in the sidebar.")
 
 for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
@@ -306,7 +297,7 @@ wells_df["water_cut_pct"] = (
 missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
 if missing_coords.any() and not using_sample:
     st.warning(
-        "These wells have no saved coordinates yet, so they won't appear on the map: "
+        "These wells have no saved coordinates: "
         + ", ".join(wells_df.loc[missing_coords, "well_name"].tolist())
         + ". Add them to the 'locations' table in Supabase."
     )
@@ -335,7 +326,7 @@ with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].dropna().unique().tolist())
     field_filter = st.selectbox("Field", field_options)
 
-# Filter wells_df to selected snapshot date
+# Filter by selected snapshot date
 if selected_date_str and not history_df.empty and selected_date_str in history_df["date"].values:
     snap_df = history_df[history_df["date"] == selected_date_str].drop(columns=["date"]).reset_index(drop=True)
     for col in ["injection_rate", "last_test_date"]:
@@ -370,33 +361,21 @@ agg_history = (
     if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
 )
 
-bopd_change = None
-injection_change = None
-water_prod_change = None
-water_source_change = None
-
-if len(agg_history) >= 2:
-    prev = agg_history["bopd"].iloc[-2]
-    curr = agg_history["bopd"].iloc[-1]
-    if prev:
-        bopd_change = int(curr - prev)
-
+bopd_change = injection_change = water_prod_change = water_source_change = None
 if not history_df.empty:
     dates = sorted(history_df["date"].unique())
     if len(dates) >= 2:
         prev_date, curr_date = dates[-2], dates[-1]
         prev_df = history_df[history_df["date"] == prev_date].copy()
         curr_df = history_df[history_df["date"] == curr_date].copy()
-        prev_inj = int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
-        curr_inj = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum())
-        injection_change = curr_inj - prev_inj
         prev_df["bwpd"] = (prev_df["bfpd"] - prev_df["bopd"]).clip(lower=0)
         curr_df["bwpd"] = (curr_df["bfpd"] - curr_df["bopd"]).clip(lower=0)
+        bopd_change         = int(curr_df["bopd"].sum()) - int(prev_df["bopd"].sum())
+        injection_change    = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum()) - \
+                              int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
         water_prod_change   = int(curr_df["bwpd"].sum()) - int(prev_df["bwpd"].sum())
-        water_source_change = (
-            int(curr_df.loc[curr_df["status"] == "Water Source", "bwpd"].sum()) -
-            int(prev_df.loc[prev_df["status"] == "Water Source", "bwpd"].sum())
-        )
+        water_source_change = int(curr_df.loc[curr_df["status"] == "Water Source", "bwpd"].sum()) - \
+                              int(prev_df.loc[prev_df["status"] == "Water Source", "bwpd"].sum())
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
 row1_c1.metric("Total Production",
@@ -437,7 +416,7 @@ with pie_col:
         font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    field_totals = wells_df.groupby("field")["bopd"].sum().reset_index()
+    field_totals = display_wells.groupby("field")["bopd"].sum().reset_index()
     field_order = ["North", "South", "East", "West"]
     field_totals["sort_key"] = field_totals["field"].apply(
         lambda f: next((i for i, k in enumerate(field_order) if k.lower() in f.lower()), len(field_order))
@@ -488,7 +467,7 @@ with map_col:
 # ----------------------------------------------------------------------------
 st.subheader("Total Production Trend")
 if agg_history.empty:
-    st.caption("No history yet — add a few days of data to see the trend.")
+    st.caption("No history yet — upload data to see the trend.")
 else:
     trend_df = history_df.copy()
     trend_df["bwpd"] = (trend_df["bfpd"] - trend_df["bopd"]).clip(lower=0)
@@ -496,10 +475,8 @@ else:
         trend_df["bwpd"] / trend_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
     trend_agg = trend_df.groupby("date").agg(
-        bfpd=("bfpd", "sum"),
-        bopd=("bopd", "sum"),
-        bwpd=("bwpd", "sum"),
-        water_cut_pct=("water_cut_pct", "mean"),
+        bfpd=("bfpd", "sum"), bopd=("bopd", "sum"),
+        bwpd=("bwpd", "sum"), water_cut_pct=("water_cut_pct", "mean"),
     ).reset_index().sort_values("date")
     trend_agg["water_cut_pct"] = trend_agg["water_cut_pct"].round(1)
 
@@ -510,35 +487,30 @@ else:
         fig.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg[y_col],
             mode="lines", fill="tozeroy",
-            line=dict(color=line_color, width=2),
-            fillcolor=fill_color,
+            line=dict(color=line_color, width=2), fillcolor=fill_color,
         ))
         fig.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
-            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-            font=dict(color="#94a3b8"),
-            xaxis=dict(gridcolor="#263144"),
-            yaxis=dict(gridcolor="#263144", title=y_title))
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
+            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
         return fig
 
     with trend_tab1:
-        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",   "BOPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
     with trend_tab2:
-        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
     with trend_tab3:
-        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",  "BWPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
     with trend_tab4:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg["water_cut_pct"],
             mode="lines+markers", fill="tozeroy",
-            line=dict(color="#ef4444", width=2),
-            fillcolor="rgba(239,68,68,0.15)",
+            line=dict(color="#ef4444", width=2), fillcolor="rgba(239,68,68,0.15)",
         ))
         fig_wc.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
-            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-            font=dict(color="#94a3b8"),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
             xaxis=dict(gridcolor="#263144"),
             yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
         st.plotly_chart(fig_wc, use_container_width=True)
@@ -548,7 +520,7 @@ else:
 # ----------------------------------------------------------------------------
 st.subheader("Injection Rate Trend")
 if history_df.empty:
-    st.caption("No history yet — add a few days of data to see the trend.")
+    st.caption("No history yet — upload data to see the trend.")
 else:
     inj_hist = history_df[history_df["status"].isin(["Injector", "Water Source"])]
     if inj_hist.empty:
@@ -559,8 +531,7 @@ else:
                           color_discrete_map=STATUS_COLORS, markers=True)
         fig_inj.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
-            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-            font=dict(color="#94a3b8"),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
             xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="Injection Rate"),
             legend=dict(font=dict(color="#e2e8f0"), orientation="h"))
         st.plotly_chart(fig_inj, use_container_width=True)
@@ -590,7 +561,7 @@ with detail_col:
         if not history_df.empty else pd.DataFrame()
     )
     if well_history.empty:
-        st.caption(f"No history yet for {selected_well} — add multiple days of data to build this chart.")
+        st.caption(f"No history yet for {selected_well}.")
     else:
         well_history["bwpd"] = (well_history["bfpd"] - well_history["bopd"]).clip(lower=0)
         well_history["water_cut_pct"] = (
@@ -604,35 +575,30 @@ with detail_col:
             fig.add_trace(go.Scatter(
                 x=well_history["date"], y=well_history[y_col],
                 mode="lines+markers", fill="tozeroy",
-                line=dict(color=line_color, width=2),
-                fillcolor=fill_color,
+                line=dict(color=line_color, width=2), fillcolor=fill_color,
             ))
             fig.update_layout(
                 height=300, margin=dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                font=dict(color="#94a3b8"),
-                xaxis=dict(gridcolor="#263144"),
-                yaxis=dict(gridcolor="#263144", title=y_title))
+                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
+                xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
             return fig
 
         with w_tab1:
-            st.plotly_chart(make_well_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",   "BOPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
         with w_tab2:
-            st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
         with w_tab3:
-            st.plotly_chart(make_well_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",  "BWPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
         with w_tab4:
             fig_wc2 = go.Figure()
             fig_wc2.add_trace(go.Scatter(
                 x=well_history["date"], y=well_history["water_cut_pct"],
                 mode="lines+markers", fill="tozeroy",
-                line=dict(color="#ef4444", width=2),
-                fillcolor="rgba(239,68,68,0.15)",
+                line=dict(color="#ef4444", width=2), fillcolor="rgba(239,68,68,0.15)",
             ))
             fig_wc2.update_layout(
                 height=300, margin=dict(l=0, r=0, t=10, b=0),
-                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                font=dict(color="#94a3b8"),
+                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
                 xaxis=dict(gridcolor="#263144"),
                 yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
             st.plotly_chart(fig_wc2, use_container_width=True)
@@ -651,6 +617,6 @@ display_df = filtered[["well_name", "field", "status", "bfpd", "bopd", "bwpd",
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 if using_sample:
-    st.caption("⚠️ Showing sample data — insert rows into the 'well_data' table in Supabase to see real data.")
+    st.caption("⚠️ Showing sample data — upload a file in the sidebar to load real data.")
 else:
     st.caption("✅ Showing live shared data from Supabase.")
