@@ -68,11 +68,6 @@ def get_sheet():
     return get_gsheet_client().open_by_key(st.secrets["sheet"]["sheet_id"])
 
 def read_data():
-    """Reads the single 'data' tab.
-    Returns (current_df, history_df):
-      current_df  = rows from the most recent date (today's snapshot)
-      history_df  = all rows (used for trend charts)
-    """
     ws = get_sheet().worksheet("data")
     records = ws.get_all_records()
     if not records:
@@ -98,7 +93,7 @@ def read_locations():
     return df
 
 # ----------------------------------------------------------------------------
-# SAMPLE DATA (fallback only — shown if 'data' tab is empty)
+# SAMPLE DATA
 # ----------------------------------------------------------------------------
 @st.cache_data
 def generate_sample_data():
@@ -160,15 +155,11 @@ if using_sample:
     if sheet_connected:
         st.info("No data yet — showing sample data. Add rows to the 'data' tab in your Google Sheet.")
 
-# Guard missing columns
 for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
 
-# Join field + coordinates from locations tab
 wells_df = wells_df.merge(locations_df, on="well_name", how="left")
-
-# Derive bwpd and water_cut_pct
 wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
 wells_df["water_cut_pct"] = (
     wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100
@@ -198,14 +189,14 @@ filtered = wells_df if field_filter == "All" else wells_df[wells_df["field"] == 
 # ----------------------------------------------------------------------------
 # SUMMARY METRICS
 # ----------------------------------------------------------------------------
-total_bopd          = int(filtered["bopd"].sum())
-active_count        = int((filtered["status"] == "Oil").sum())
-shutin_count        = int((filtered["status"] == "Shut-in").sum())
-down_count          = int((filtered["status"] == "Down").sum())
-injector_count      = int((filtered["status"] == "Injector").sum())
-water_source_count  = int((filtered["status"] == "Water Source").sum())
-total_injection     = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
-total_water_source  = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
+total_bopd         = int(filtered["bopd"].sum())
+active_count       = int((filtered["status"] == "Oil").sum())
+shutin_count       = int((filtered["status"] == "Shut-in").sum())
+down_count         = int((filtered["status"] == "Down").sum())
+injector_count     = int((filtered["status"] == "Injector").sum())
+water_source_count = int((filtered["status"] == "Water Source").sum())
+total_injection    = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
+total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
 total_water_production = int(filtered["bwpd"].sum())
 
 agg_history = (
@@ -213,18 +204,19 @@ agg_history = (
     if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
 )
 
-pct_change = None
+bopd_change = None
 if len(agg_history) >= 2:
-    prev, curr = agg_history["bopd"].iloc[-2], agg_history["bopd"].iloc[-1]
+    prev = agg_history["bopd"].iloc[-2]
+    curr = agg_history["bopd"].iloc[-1]
     if prev:
-        pct_change = round((curr - prev) / prev * 100, 1)
+        bopd_change = int(curr - prev)
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
-row1_c1.metric("Total Production",       f"{total_bopd:,} BOPD",
-    f"{bopd_change:+,} BOPD vs yesterday" if bopd_change is not None else None)
-row1_c2.metric("Total Injection",       f"{total_injection:,} Barrels")
-row1_c3.metric("Total Water Production",f"{total_water_production:,} BWPD")
-row1_c4.metric("Total Water Source",    f"{total_water_source:,} BWPD")
+row1_c1.metric("Total Production",        f"{total_bopd:,} BOPD",
+               f"{bopd_change:+,} BOPD vs yesterday" if bopd_change is not None else None)
+row1_c2.metric("Total Injection",         f"{total_injection:,} Barrels")
+row1_c3.metric("Total Water Production",  f"{total_water_production:,} BWPD")
+row1_c4.metric("Total Water Source",      f"{total_water_source:,} BWPD")
 
 st.markdown("")
 
@@ -244,10 +236,11 @@ with pie_col:
         textposition="outside",
         hovertemplate="%{label}: %{value} wells<extra></extra>",
     )
-    fig_pie.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0),
-                          paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                          legend=dict(font=dict(color="#e2e8f0"), orientation="h"),
-                          font=dict(color="#e2e8f0"))
+    fig_pie.update_layout(
+        height=200, margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+        legend=dict(font=dict(color="#e2e8f0"), orientation="h"),
+        font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
 
     field_totals = wells_df.groupby("field")["bopd"].sum().reset_index()
