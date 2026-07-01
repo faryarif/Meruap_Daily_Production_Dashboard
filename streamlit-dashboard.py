@@ -97,8 +97,41 @@ def read_data():
     current_df = df[df["date"] == latest_date].drop(columns=["date"]).reset_index(drop=True)
     return current_df, df
 
-@st.cache_data(ttl=30, show_spinner=False)
-def read_locations():
+def write_well_data(df: pd.DataFrame):
+    """Appends rows to the well_data table in Supabase."""
+    client = get_supabase()
+    rows = df.to_dict(orient="records")
+    # Convert any NaN/NaT to None for JSON compatibility
+    clean_rows = []
+    for row in rows:
+        clean_rows.append({
+            k: (None if (isinstance(v, float) and np.isnan(v)) else
+                str(v) if isinstance(v, pd.Timestamp) else v)
+            for k, v in row.items()
+        })
+    client.table("well_data").insert(clean_rows).execute()
+
+
+def validate_etl(df: pd.DataFrame):
+    errors = []
+    required = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+    missing = set(required) - set(df.columns)
+    if missing:
+        errors.append(f"Missing columns: {', '.join(sorted(missing))}")
+        return errors  # stop early
+    if df["well_name"].isna().any() or (df["well_name"].astype(str).str.strip() == "").any():
+        errors.append("Some rows have empty well_name")
+    if df["date"].isna().any():
+        errors.append("Some rows have empty date")
+    if (pd.to_numeric(df["bopd"], errors="coerce") < 0).any():
+        errors.append("BOPD cannot be negative")
+    if (pd.to_numeric(df["bfpd"], errors="coerce") < 0).any():
+        errors.append("BFPD cannot be negative")
+    valid_statuses = set(STATUS_COLORS.keys())
+    bad = set(df["status"].dropna().unique()) - valid_statuses
+    if bad:
+        errors.append(f"Unrecognized status: {', '.join(sorted(bad))}")
+    return errors
     client = get_supabase()
     resp = client.table("locations").select(
         "well_name, field, latitude, longitude"
@@ -159,6 +192,85 @@ with st.sidebar:
         st.success("✅ Supabase connected")
     else:
         st.error(f"❌ Supabase error: {msg}")
+
+    st.markdown("---")
+    st.markdown("### 📥 ETL — Upload Daily Data")
+    st.markdown("Drop an Excel or CSV file to append to the database.")
+
+    uploaded = st.file_uploader(
+        "Drag & drop file here",
+        type=["xlsx", "xls", "csv"],
+        label_visibility="collapsed",
+    )
+
+    if uploaded:
+        try:
+            raw = pd.read_csv(uploaded) if uploaded.name.endswith(".csv") else pd.read_excel(uploaded)
+            st.markdown(f"**{len(raw)} rows detected** from `{uploaded.name}`")
+
+            # ---- TRANSFORM ----
+            # Normalise column names
+            raw.columns = raw.columns.str.strip().str.lower().str.replace(" ", "_")
+            # Parse date
+            raw["date"] = pd.to_datetime(raw["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            # Numeric coerce
+            for col in ["bfpd", "bopd", "injection_rate"]:
+                if col in raw.columns:
+                    raw[col] = pd.to_numeric(raw[col], errors="coerce").fillna(0)
+            # Derive bwpd and water_cut_pct (not stored, just shown in preview)
+            raw["bwpd"] = (raw["bfpd"] - raw["bopd"]).clip(lower=0)
+            raw["water_cut_pct"] = (
+                raw["bwpd"] / raw["bfpd"].replace(0, np.nan) * 100
+            ).round(1).fillna(0)
+
+            # ---- VALIDATE ----
+            errors = validate_etl(raw)
+            if errors:
+                for e in errors:
+                    st.error(f"❌ {e}")
+            else:
+                st.success("✅ Validation passed")
+
+                # Preview
+                with st.expander("Preview data", expanded=False):
+                    st.dataframe(
+                        raw[["date", "well_name", "status", "bfpd", "bopd",
+                             "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]],
+                        use_container_width=True, hide_index=True
+                    )
+
+                # Check for duplicate dates already in DB
+                if not history_df.empty:
+                    existing_dates = set(history_df["date"].unique())
+                    incoming_dates = set(raw["date"].dropna().unique())
+                    overlap = existing_dates & incoming_dates
+                    if overlap:
+                        st.warning(
+                            f"⚠️ These dates already exist in the database: "
+                            f"{', '.join(sorted(overlap))}. "
+                            f"Appending will create duplicate rows for those dates."
+                        )
+
+                if st.button("📤 Append to Supabase", type="primary", use_container_width=True):
+                    try:
+                        insert_cols = ["date", "well_name", "status", "bfpd",
+                                       "bopd", "injection_rate", "last_test_date"]
+                        write_well_data(raw[insert_cols])
+                        st.cache_data.clear()
+                        st.success(f"✅ {len(raw)} rows appended successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to write to Supabase: {e}")
+
+        except Exception as e:
+            st.error(f"Could not read file: {e}")
+
+    st.markdown("---")
+    st.markdown("**Expected columns:**")
+    st.code(
+        "date, well_name, status,\nbfpd, bopd, injection_rate,\nlast_test_date",
+        language="text"
+    )
 
 # ----------------------------------------------------------------------------
 # LOAD DATA
