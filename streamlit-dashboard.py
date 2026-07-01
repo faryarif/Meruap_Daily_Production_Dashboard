@@ -423,7 +423,8 @@ with top_col:
 
 with detail_col:
     st.subheader("Well Decline Trend")
-    selected_well = st.selectbox("Select a well", filtered["well_name"].tolist())
+    top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["well_name"] if not filtered.empty else filtered["well_name"].iloc[0]
+    selected_well = st.selectbox("Select a well", filtered["well_name"].tolist(), index=filtered["well_name"].tolist().index(top_well))
     well_history = (
         history_df[history_df["well_name"] == selected_well].sort_values("date").copy()
         if not history_df.empty else pd.DataFrame()
