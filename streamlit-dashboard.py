@@ -4,10 +4,13 @@ Daily Production & Well Map Dashboard — Shared via Google Sheets
 Run locally:
     pip install streamlit pandas plotly gspread google-auth
 
-Setup (one-time):
-    1. A Google Sheet with two tabs: "current" and "history"
-    2. A Google service account with Editor access to that sheet
-    3. Streamlit secrets configured with the service account + sheet_id
+Google Sheet tabs needed:
+    - data      : date, well_name, status, bfpd, bopd, injection_rate, last_test_date
+    - locations : well_name, field, latitude, longitude
+
+Daily workflow:
+    Append new rows to the 'data' tab with today's date.
+    The app auto-treats the latest date as "current" and all rows as history.
 """
 
 import streamlit as st
@@ -25,17 +28,16 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(page_title="Meruap Dashboard", page_icon="🛢️", layout="wide")
 
 STATUS_COLORS = {
-    "Oil": "#22c55e",            # green
-    "Water Source": "#1e3a8a",   # dark blue
-    "Injector": "#3b82f6",       # blue
-    "Gas": "#f97316",            # orange
-    "Shut-in": "#eab308",        # yellow
-    "Down": "#6b7280",           # gray
-    "Plug Abandon": "#ef4444",   # red
+    "Oil": "#22c55e",
+    "Water Source": "#1e3a8a",
+    "Injector": "#3b82f6",
+    "Gas": "#f97316",
+    "Shut-in": "#eab308",
+    "Down": "#6b7280",
+    "Plug Abandon": "#ef4444",
 }
 
-REQUIRED_COLS = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
-DATA_COLS = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+DATA_COLS     = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
 LOCATION_COLS = ["well_name", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
@@ -63,24 +65,29 @@ def get_gsheet_client():
     return gspread.authorize(creds)
 
 def get_sheet():
-    client = get_gsheet_client()
-    return client.open_by_key(st.secrets["sheet"]["sheet_id"])
+    return get_gsheet_client().open_by_key(st.secrets["sheet"]["sheet_id"])
 
-def read_current():
-    sheet = get_sheet()
-    ws = sheet.worksheet("current")
+def read_data():
+    """Reads the single 'data' tab.
+    Returns (current_df, history_df):
+      current_df  = rows from the most recent date (today's snapshot)
+      history_df  = all rows (used for trend charts)
+    """
+    ws = get_sheet().worksheet("data")
     records = ws.get_all_records()
     if not records:
-        return None
+        return None, pd.DataFrame(columns=DATA_COLS)
     df = pd.DataFrame(records)
-    for col in ["bopd", "bwpd", "water_cut_pct", "injection_rate"]:
+    for col in ["bopd", "bfpd", "injection_rate"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    latest_date = df["date"].max()
+    current_df = df[df["date"] == latest_date].drop(columns=["date"]).reset_index(drop=True)
+    return current_df, df
 
 def read_locations():
-    sheet = get_sheet()
-    ws = sheet.worksheet("locations")
+    ws = get_sheet().worksheet("locations")
     records = ws.get_all_records()
     if not records:
         return pd.DataFrame(columns=LOCATION_COLS)
@@ -90,81 +97,32 @@ def read_locations():
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
-def read_history():
-    sheet = get_sheet()
-    ws = sheet.worksheet("history")
-    records = ws.get_all_records()
-    if not records:
-        return pd.DataFrame(columns=HISTORY_COLS)
-    df = pd.DataFrame(records)
-    for col in ["bopd", "bwpd", "water_cut_pct", "injection_rate"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
-
-def write_current(df: pd.DataFrame):
-    sheet = get_sheet()
-    ws = sheet.worksheet("current")
-    ws.clear()
-    ws.update([df.columns.tolist()] + df.astype(str).values.tolist())
-
-def validate_data(df: pd.DataFrame):
-    errors = []
-    if (df["bopd"] < 0).any():
-        errors.append("BOPD cannot be negative")
-    if (~df["water_cut_pct"].between(0, 100)).any():
-        errors.append("Water cut must be 0–100%")
-    if (df["bwpd"] < 0).any():
-        errors.append("BWPD cannot be negative")
-    if (df["injection_rate"] < 0).any():
-        errors.append("Injection rate cannot be negative")
-    valid_statuses = set(STATUS_COLORS.keys())
-    bad_statuses = set(df["status"].unique()) - valid_statuses
-    if bad_statuses:
-        errors.append(f"Unrecognized status value(s): {', '.join(sorted(bad_statuses))} — expected one of {', '.join(valid_statuses)}")
-    if df["well_name"].isna().any() or (df["well_name"].astype(str).str.strip() == "").any():
-        errors.append("Missing well_name")
-    return errors
-
-def append_history(df: pd.DataFrame, date_str: str):
-    sheet = get_sheet()
-    ws = sheet.worksheet("history")
-    snapshot = df[["well_name", "field", "status", "bopd", "bwpd", "water_cut_pct", "injection_rate"]].copy()
-    snapshot.insert(0, "date", date_str)
-    existing = ws.get_all_values()
-    rows = snapshot.astype(str).values.tolist()
-    if not existing:
-        ws.update([HISTORY_COLS] + rows)
-    else:
-        ws.append_rows(rows, value_input_option="RAW")
-
 # ----------------------------------------------------------------------------
-# SAMPLE DATA (fallback only — used if Sheet/tab is empty)
+# SAMPLE DATA (fallback only — shown if 'data' tab is empty)
 # ----------------------------------------------------------------------------
 @st.cache_data
-def generate_sample_wells():
+def generate_sample_data():
     rng = np.random.default_rng(42)
     names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    rows = []
-    for i, name in enumerate(names):
+             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    base_rows = []
+    for name in names:
         base_rate = rng.integers(80, 500)
         roll = rng.random()
         status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
         bopd_val = int(base_rate) if status == "Oil" else 0
         bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
-        rows.append({
+        base_rows.append({
             "well_name": name, "status": status,
             "bfpd": bfpd_val, "bopd": bopd_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
         })
-    current_df = pd.DataFrame(rows)
-    # Generate 14-day sample history
+    current_df = pd.DataFrame(base_rows)
     history_rows = []
     for d in range(14):
         date_str = (datetime(2026, 6, 23) - pd.Timedelta(days=13 - d)).strftime("%Y-%m-%d")
-        for row in rows:
+        for row in base_rows:
             history_rows.append({**row, "date": date_str})
     return current_df, pd.DataFrame(history_rows)
 
@@ -172,20 +130,17 @@ def generate_sample_wells():
 def generate_sample_locations():
     rng = np.random.default_rng(42)
     names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
     fields = ["North Block", "South Block", "East Flank"]
-    rows = []
-    for i, name in enumerate(names):
-        rows.append({
-            "well_name": name,
-            "field": fields[i % 3],
-            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
-            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
-        })
-    return pd.DataFrame(rows)
+    return pd.DataFrame([{
+        "well_name": name,
+        "field": fields[i % 3],
+        "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
+        "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
+    } for i, name in enumerate(names)])
 
 # ----------------------------------------------------------------------------
-# LOAD SHARED DATA (everyone who opens the app sees this)
+# LOAD DATA
 # ----------------------------------------------------------------------------
 try:
     wells_df, history_df = read_data()
@@ -200,20 +155,24 @@ except Exception as e:
 
 using_sample = wells_df is None or wells_df.empty
 if using_sample:
-    wells_df, history_df = generate_sample_wells()
+    wells_df, history_df = generate_sample_data()
     locations_df = generate_sample_locations()
     if sheet_connected:
         st.info("No data yet — showing sample data. Add rows to the 'data' tab in your Google Sheet.")
 
+# Guard missing columns
 for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
 
+# Join field + coordinates from locations tab
 wells_df = wells_df.merge(locations_df, on="well_name", how="left")
 
-# Derive bwpd and water_cut_pct after merge
+# Derive bwpd and water_cut_pct
 wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
-wells_df["water_cut_pct"] = (wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100).round(1).fillna(0)
+wells_df["water_cut_pct"] = (
+    wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100
+).round(1).fillna(0)
 
 missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
 if missing_coords.any() and not using_sample:
@@ -231,7 +190,7 @@ with col_title:
     st.title("Daily Production Dashboard")
     st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
 with col_filter:
-    field_options = ["All"] + sorted(wells_df["field"].unique().tolist())
+    field_options = ["All"] + sorted(wells_df["field"].dropna().unique().tolist())
     field_filter = st.selectbox("Field", field_options)
 
 filtered = wells_df if field_filter == "All" else wells_df[wells_df["field"] == field_filter]
@@ -239,17 +198,21 @@ filtered = wells_df if field_filter == "All" else wells_df[wells_df["field"] == 
 # ----------------------------------------------------------------------------
 # SUMMARY METRICS
 # ----------------------------------------------------------------------------
-total_bopd = int(filtered["bopd"].sum())
-active_count = int((filtered["status"] == "Oil").sum())
-shutin_count = int((filtered["status"] == "Shut-in").sum())
-down_count = int((filtered["status"] == "Down").sum())
-injector_count = int((filtered["status"] == "Injector").sum())
-water_source_count = int((filtered["status"] == "Water Source").sum())
-total_injection = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
-total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
+total_bopd          = int(filtered["bopd"].sum())
+active_count        = int((filtered["status"] == "Oil").sum())
+shutin_count        = int((filtered["status"] == "Shut-in").sum())
+down_count          = int((filtered["status"] == "Down").sum())
+injector_count      = int((filtered["status"] == "Injector").sum())
+water_source_count  = int((filtered["status"] == "Water Source").sum())
+total_injection     = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
+total_water_source  = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
 total_water_production = int(filtered["bwpd"].sum())
 
-agg_history = history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date") if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
+agg_history = (
+    history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date")
+    if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
+)
+
 pct_change = None
 if len(agg_history) >= 2:
     prev, curr = agg_history["bopd"].iloc[-2], agg_history["bopd"].iloc[-1]
@@ -257,15 +220,15 @@ if len(agg_history) >= 2:
         pct_change = round((curr - prev) / prev * 100, 1)
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
-row1_c1.metric("Total Production", f"{total_bopd:,} BOPD", f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
-row1_c2.metric("Total Injection", f"{total_injection:,} Barrels")
-row1_c3.metric("Total Water Production", f"{total_water_production:,} BWPD")
-row1_c4.metric("Total Water Source", f"{total_water_source:,} BWPD")
+row1_c1.metric("Total Production",      f"{total_bopd:,} BOPD",    f"{pct_change:+.1f}% vs yesterday" if pct_change is not None else None)
+row1_c2.metric("Total Injection",       f"{total_injection:,} Barrels")
+row1_c3.metric("Total Water Production",f"{total_water_production:,} BWPD")
+row1_c4.metric("Total Water Source",    f"{total_water_source:,} BWPD")
 
 st.markdown("")
 
 # ----------------------------------------------------------------------------
-# STATUS & FIELD TOTALS + WELL MAP (Status & Field Totals shown first)
+# STATUS & FIELD TOTALS  +  WELL MAP
 # ----------------------------------------------------------------------------
 pie_col, map_col = st.columns([1, 1.3])
 
@@ -273,14 +236,17 @@ with pie_col:
     st.subheader("Status & Field Totals")
     status_counts = filtered["status"].value_counts().reset_index()
     status_counts.columns = ["status", "count"]
-    fig_pie = px.pie(status_counts, names="status", values="count", color="status", color_discrete_map=STATUS_COLORS, hole=0.55)
+    fig_pie = px.pie(status_counts, names="status", values="count",
+                     color="status", color_discrete_map=STATUS_COLORS, hole=0.55)
     fig_pie.update_traces(
         texttemplate="%{label}: %{value}",
         textposition="outside",
         hovertemplate="%{label}: %{value} wells<extra></extra>",
     )
-    fig_pie.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                           legend=dict(font=dict(color="#e2e8f0"), orientation="h"), font=dict(color="#e2e8f0"))
+    fig_pie.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0),
+                          paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+                          legend=dict(font=dict(color="#e2e8f0"), orientation="h"),
+                          font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
 
     field_totals = wells_df.groupby("field")["bopd"].sum().reset_index()
@@ -289,10 +255,13 @@ with pie_col:
         lambda f: next((i for i, k in enumerate(field_order) if k.lower() in f.lower()), len(field_order))
     )
     field_totals = field_totals.sort_values("sort_key").drop(columns="sort_key")
-    fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h", color_discrete_sequence=["#38bdf8"])
-    fig_field.update_layout(height=200, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                             font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title=None,
-                             yaxis=dict(categoryorder="array", categoryarray=field_totals["field"].tolist()[::-1]))
+    fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h",
+                       color_discrete_sequence=["#38bdf8"])
+    fig_field.update_layout(
+        height=200, margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+        font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title=None,
+        yaxis=dict(categoryorder="array", categoryarray=field_totals["field"].tolist()[::-1]))
     st.plotly_chart(fig_field, use_container_width=True)
 
 with map_col:
@@ -302,7 +271,8 @@ with map_col:
         mappable, lat="latitude", lon="longitude", color="status",
         color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
         hover_name="well_name",
-        hover_data={"field": True, "bopd": True, "water_cut_pct": True, "latitude": False, "longitude": False},
+        hover_data={"field": True, "bopd": True, "water_cut_pct": True,
+                    "latitude": False, "longitude": False},
         text="well_name", map_style="open-street-map",
     )
     fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=11))
@@ -327,46 +297,48 @@ with map_col:
     st.caption("Basemap: Esri World Imagery (free satellite, no API key).")
 
 # ----------------------------------------------------------------------------
-# PRODUCTION TREND (real accumulated history)
+# PRODUCTION TREND
 # ----------------------------------------------------------------------------
 st.subheader("Total Production Trend")
 if agg_history.empty:
-    st.caption("No history yet — once you publish a few days of data, the trend will appear here.")
+    st.caption("No history yet — add a few days of data to see the trend.")
 else:
     fig_trend = go.Figure()
     fig_trend.add_trace(go.Scatter(
         x=agg_history["date"], y=agg_history["bopd"], mode="lines", fill="tozeroy",
         line=dict(color="#38bdf8", width=2), fillcolor="rgba(56,189,248,0.25)",
     ))
-    fig_trend.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                             font=dict(color="#94a3b8"), xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="BOPD"))
+    fig_trend.update_layout(
+        height=280, margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+        font=dict(color="#94a3b8"),
+        xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="BOPD"))
     st.plotly_chart(fig_trend, use_container_width=True)
 
 # ----------------------------------------------------------------------------
-# INJECTION RATE TREND (Injector + Water Source wells)
+# INJECTION RATE TREND
 # ----------------------------------------------------------------------------
 st.subheader("Injection Rate Trend")
 if history_df.empty:
-    st.caption("No history yet — once you publish a few days of data, the injection trend will appear here.")
+    st.caption("No history yet — add a few days of data to see the trend.")
 else:
-    injection_history = history_df[history_df["status"].isin(["Injector", "Water Source"])]
-    if injection_history.empty:
-        st.caption("No Injector or Water Source wells found in the published data yet.")
+    inj_hist = history_df[history_df["status"].isin(["Injector", "Water Source"])]
+    if inj_hist.empty:
+        st.caption("No Injector or Water Source wells found in data yet.")
     else:
-        inj_by_date_status = injection_history.groupby(["date", "status"])["injection_rate"].sum().reset_index().sort_values("date")
-        fig_inj = px.line(
-            inj_by_date_status, x="date", y="injection_rate", color="status",
-            color_discrete_map=STATUS_COLORS, markers=True,
-        )
+        inj_by_date = inj_hist.groupby(["date", "status"])["injection_rate"].sum().reset_index().sort_values("date")
+        fig_inj = px.line(inj_by_date, x="date", y="injection_rate", color="status",
+                          color_discrete_map=STATUS_COLORS, markers=True)
         fig_inj.update_layout(
-            height=280, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-            font=dict(color="#94a3b8"), xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="Injection Rate"),
-            legend=dict(font=dict(color="#e2e8f0"), orientation="h"),
-        )
+            height=280, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+            font=dict(color="#94a3b8"),
+            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="Injection Rate"),
+            legend=dict(font=dict(color="#e2e8f0"), orientation="h"))
         st.plotly_chart(fig_inj, use_container_width=True)
 
 # ----------------------------------------------------------------------------
-# TOP PRODUCERS + REAL WELL DECLINE TREND
+# TOP PRODUCERS  +  WELL DECLINE TREND
 # ----------------------------------------------------------------------------
 top_col, detail_col = st.columns(2)
 
@@ -374,35 +346,45 @@ with top_col:
     st.subheader("Top Producing Wells")
     top_wells = filtered.sort_values("bopd", ascending=False).head(8)
     fig_top = px.bar(top_wells, x="well_name", y="bopd", color_discrete_sequence=["#38bdf8"])
-    fig_top.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                           font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title="BOPD")
+    fig_top.update_layout(
+        height=300, margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+        font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title="BOPD")
     st.plotly_chart(fig_top, use_container_width=True)
 
 with detail_col:
-    st.subheader("Well Decline Trend (real history)")
+    st.subheader("Well Decline Trend")
     selected_well = st.selectbox("Select a well", filtered["well_name"].tolist())
-    well_history = history_df[history_df["well_name"] == selected_well].sort_values("date") if not history_df.empty else pd.DataFrame()
+    well_history = (
+        history_df[history_df["well_name"] == selected_well].sort_values("date")
+        if not history_df.empty else pd.DataFrame()
+    )
     if well_history.empty:
-        st.caption(f"No history yet for {selected_well} — publish data over multiple days to build this chart.")
+        st.caption(f"No history yet for {selected_well} — add multiple days of data to build this chart.")
     else:
         fig_decline = px.line(well_history, x="date", y="bopd")
         fig_decline.update_traces(line=dict(color="#f59e0b", width=2))
-        fig_decline.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-                                   font=dict(color="#94a3b8"), xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="BOPD"))
+        fig_decline.update_layout(
+            height=300, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+            font=dict(color="#94a3b8"),
+            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="BOPD"))
         st.plotly_chart(fig_decline, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # WELL TABLE
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
-display_df = filtered[["well_name", "field", "status", "bfpd", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]].rename(
-    columns={"well_name": "Well", "field": "Field", "status": "Status", "bfpd": "BFPD",
-             "bopd": "BOPD", "bwpd": "BWPD", "water_cut_pct": "Water Cut (%)",
-             "injection_rate": "Injection Rate", "last_test_date": "Last Test"}
+display_df = filtered[["well_name", "field", "status", "bfpd", "bopd", "bwpd",
+                        "water_cut_pct", "injection_rate", "last_test_date"]].rename(
+    columns={"well_name": "Well", "field": "Field", "status": "Status",
+             "bfpd": "BFPD", "bopd": "BOPD", "bwpd": "BWPD",
+             "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate",
+             "last_test_date": "Last Test"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 if using_sample:
-    st.caption("⚠️ Currently showing sample data — upload + publish a file in the sidebar to share real data with everyone.")
+    st.caption("⚠️ Showing sample data — add rows to the 'data' tab in your Google Sheet to see real data.")
 else:
     st.caption("✅ Showing live shared data from Google Sheets.")
