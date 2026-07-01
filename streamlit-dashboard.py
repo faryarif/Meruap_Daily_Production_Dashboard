@@ -56,6 +56,9 @@ st.markdown("""
 section[data-testid="stSidebar"] { background-color: #0f1729; }
 h1, h2, h3 { color: #e2e8f0 !important; }
 .block-container { padding-top: 1.5rem; }
+[data-testid="stToolbar"] { display: none; }
+[data-testid="stDecoration"] { display: none; }
+header[data-testid="stHeader"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
