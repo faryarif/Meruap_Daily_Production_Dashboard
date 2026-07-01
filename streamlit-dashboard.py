@@ -34,9 +34,9 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",   # red
 }
 
-REQUIRED_COLS = ["well_name", "field", "status", "bfpd", "bopd", "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]
-HISTORY_COLS = ["date", "well_name", "field", "status", "bfpd", "bopd", "bwpd", "water_cut_pct", "injection_rate"]
-LOCATION_COLS = ["well_name", "latitude", "longitude"]
+REQUIRED_COLS = ["well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+HISTORY_COLS = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate"]
+LOCATION_COLS = ["well_name", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -89,18 +89,6 @@ def read_locations():
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
-
-def write_locations(df: pd.DataFrame):
-    """Upserts well_name -> lat/lon into the 'locations' tab. Only writes
-    wells that are new or whose coordinates changed, so existing rows aren't
-    needlessly rewritten."""
-    sheet = get_sheet()
-    ws = sheet.worksheet("locations")
-    existing = read_locations()
-    incoming = df[LOCATION_COLS].drop_duplicates(subset="well_name")
-    merged = pd.concat([existing, incoming]).drop_duplicates(subset="well_name", keep="last")
-    ws.clear()
-    ws.update([LOCATION_COLS] + merged[LOCATION_COLS].astype(str).values.tolist())
 
 def read_history():
     sheet = get_sheet()
@@ -158,20 +146,16 @@ def generate_sample_wells():
     rng = np.random.default_rng(42)
     names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
               "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    fields = ["North Block", "South Block", "East Flank"]
     rows = []
     for i, name in enumerate(names):
         base_rate = rng.integers(80, 500)
         roll = rng.random()
         status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
-        water_cut = int(rng.integers(10, 60))
         bopd_val = int(base_rate) if status == "Oil" else 0
+        bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
         rows.append({
-            "well_name": name, "field": fields[i % 3], "status": status,
-            "bfpd": bopd_val + int(bopd_val * water_cut / 100) if status == "Oil" else 0,
-            "bopd": bopd_val,
-            "bwpd": int(bopd_val * water_cut / 100) if status == "Oil" else 0,
-            "water_cut_pct": water_cut,
+            "well_name": name, "status": status,
+            "bfpd": bfpd_val, "bopd": bopd_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
         })
@@ -182,10 +166,12 @@ def generate_sample_locations():
     rng = np.random.default_rng(42)
     names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
               "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    fields = ["North Block", "South Block", "East Flank"]
     rows = []
     for i, name in enumerate(names):
         rows.append({
             "well_name": name,
+            "field": fields[i % 3],
             "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
             "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
         })
@@ -213,17 +199,22 @@ if using_sample:
     if sheet_connected:
         st.info("No data published yet — showing sample data. Upload a file in the sidebar and click 'Publish' to replace it for everyone.")
 
-for col in ["bfpd", "bwpd", "injection_rate", "water_cut_pct", "last_test_date"]:
+for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
 
 wells_df = wells_df.merge(locations_df, on="well_name", how="left")
+
+# Derive bwpd and water_cut_pct after merge
+wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
+wells_df["water_cut_pct"] = (wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100).round(1).fillna(0)
+
 missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
 if missing_coords.any() and not using_sample:
     st.warning(
         "These wells have no saved coordinates yet, so they won't appear on the map: "
         + ", ".join(wells_df.loc[missing_coords, "well_name"].tolist())
-        + ". Include latitude/longitude columns for them once in any upload to register their location."
+        + ". Add them to the 'locations' tab in your Google Sheet."
     )
 
 # ----------------------------------------------------------------------------
