@@ -65,9 +65,18 @@ h1, h2, h3 { color: #e2e8f0 !important; }
 @st.cache_resource
 def get_supabase():
     return create_client(
-        st.secrets["supabase"]["url"],
+        st.secrets["supabase"]["url"].rstrip("/"),
         st.secrets["supabase"]["key"],
     )
+
+def test_connection():
+    """Quick connection test — returns (ok, message)."""
+    try:
+        client = get_supabase()
+        resp = client.table("well_data").select("well_name").limit(1).execute()
+        return True, "Connected"
+    except Exception as e:
+        return False, str(e)
 
 @st.cache_data(ttl=30, show_spinner=False)
 def read_data():
@@ -139,6 +148,14 @@ def generate_sample_locations():
         "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
         "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
     } for i, name in enumerate(names)])
+
+# Quick connection test shown in sidebar for debugging
+with st.sidebar:
+    ok, msg = test_connection()
+    if ok:
+        st.success("✅ Supabase connected")
+    else:
+        st.error(f"❌ Supabase error: {msg}")
 
 # ----------------------------------------------------------------------------
 # LOAD DATA
