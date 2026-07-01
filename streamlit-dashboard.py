@@ -34,8 +34,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",   # red
 }
 
-REQUIRED_COLS = ["well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
-HISTORY_COLS = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate"]
+REQUIRED_COLS = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+DATA_COLS = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
 LOCATION_COLS = ["well_name", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
@@ -159,7 +159,14 @@ def generate_sample_wells():
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
         })
-    return pd.DataFrame(rows)
+    current_df = pd.DataFrame(rows)
+    # Generate 14-day sample history
+    history_rows = []
+    for d in range(14):
+        date_str = (datetime(2026, 6, 23) - pd.Timedelta(days=13 - d)).strftime("%Y-%m-%d")
+        for row in rows:
+            history_rows.append({**row, "date": date_str})
+    return current_df, pd.DataFrame(history_rows)
 
 @st.cache_data
 def generate_sample_locations():
@@ -181,23 +188,22 @@ def generate_sample_locations():
 # LOAD SHARED DATA (everyone who opens the app sees this)
 # ----------------------------------------------------------------------------
 try:
-    wells_df = read_current()
-    history_df = read_history()
+    wells_df, history_df = read_data()
     locations_df = read_locations()
     sheet_connected = True
 except Exception as e:
     st.error(f"Couldn't connect to Google Sheet — check your secrets configuration. Details: {e}")
     wells_df = None
-    history_df = pd.DataFrame(columns=HISTORY_COLS)
+    history_df = pd.DataFrame(columns=DATA_COLS)
     locations_df = pd.DataFrame(columns=LOCATION_COLS)
     sheet_connected = False
 
 using_sample = wells_df is None or wells_df.empty
 if using_sample:
-    wells_df = generate_sample_wells()
+    wells_df, history_df = generate_sample_wells()
     locations_df = generate_sample_locations()
     if sheet_connected:
-        st.info("No data published yet — showing sample data. Upload a file in the sidebar and click 'Publish' to replace it for everyone.")
+        st.info("No data yet — showing sample data. Add rows to the 'data' tab in your Google Sheet.")
 
 for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
@@ -244,7 +250,6 @@ total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwp
 total_water_production = int(filtered["bwpd"].sum())
 
 agg_history = history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date") if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
-
 pct_change = None
 if len(agg_history) >= 2:
     prev, curr = agg_history["bopd"].iloc[-2], agg_history["bopd"].iloc[-1]
