@@ -205,18 +205,52 @@ agg_history = (
 )
 
 bopd_change = None
+injection_change = None
+water_prod_change = None
+water_source_change = None
+
 if len(agg_history) >= 2:
     prev = agg_history["bopd"].iloc[-2]
     curr = agg_history["bopd"].iloc[-1]
     if prev:
         bopd_change = int(curr - prev)
 
+if not history_df.empty:
+    dates = sorted(history_df["date"].unique())
+    if len(dates) >= 2:
+        prev_date, curr_date = dates[-2], dates[-1]
+        prev_df = history_df[history_df["date"] == prev_date]
+        curr_df = history_df[history_df["date"] == curr_date]
+
+        prev_inj  = int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
+        curr_inj  = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum())
+        injection_change = curr_inj - prev_inj
+
+        # bwpd derived on the fly for history rows
+        prev_df = prev_df.copy()
+        curr_df = curr_df.copy()
+        prev_df["bwpd"] = (prev_df["bfpd"] - prev_df["bopd"]).clip(lower=0)
+        curr_df["bwpd"] = (curr_df["bfpd"] - curr_df["bopd"]).clip(lower=0)
+
+        water_prod_change   = int(curr_df["bwpd"].sum()) - int(prev_df["bwpd"].sum())
+        water_source_change = (
+            int(curr_df.loc[curr_df["status"] == "Water Source", "bwpd"].sum()) -
+            int(prev_df.loc[prev_df["status"] == "Water Source", "bwpd"].sum())
+        )
+
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
-row1_c1.metric("Total Production",        f"{total_bopd:,} BOPD",
+row1_c1.metric("Total Production",
+               f"{total_bopd:,} BOPD",
                f"{bopd_change:+,} BOPD vs yesterday" if bopd_change is not None else None)
-row1_c2.metric("Total Injection",         f"{total_injection:,} Barrels")
-row1_c3.metric("Total Water Production",  f"{total_water_production:,} BWPD")
-row1_c4.metric("Total Water Source",      f"{total_water_source:,} BWPD")
+row1_c2.metric("Total Injection",
+               f"{total_injection:,} Barrels",
+               f"{injection_change:+,} Barrels vs yesterday" if injection_change is not None else None)
+row1_c3.metric("Total Water Production",
+               f"{total_water_production:,} BWPD",
+               f"{water_prod_change:+,} BWPD vs yesterday" if water_prod_change is not None else None)
+row1_c4.metric("Total Water Source",
+               f"{total_water_source:,} BWPD",
+               f"{water_source_change:+,} BWPD vs yesterday" if water_source_change is not None else None)
 
 st.markdown("")
 
