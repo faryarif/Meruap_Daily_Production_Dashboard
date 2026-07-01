@@ -294,7 +294,6 @@ with map_col:
             south=mappable["latitude"].min() - 0.01, north=mappable["latitude"].max() + 0.01,
         ))
     st.plotly_chart(fig_map, use_container_width=True)
-    st.caption("Basemap: Esri World Imagery (free satellite, no API key).")
 
 # ----------------------------------------------------------------------------
 # PRODUCTION TREND
