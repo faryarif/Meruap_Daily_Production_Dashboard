@@ -1,15 +1,21 @@
 """
-Daily Production & Well Map Dashboard — Shared via Google Sheets
+Daily Production & Well Map Dashboard — Shared via Supabase
 ------------------------------------------------------------------
 Run locally:
-    pip install streamlit pandas plotly gspread google-auth
+    pip install streamlit pandas plotly numpy supabase
 
-Google Sheet tabs needed:
-    - data      : date, well_name, status, bfpd, bopd, injection_rate, last_test_date
+Supabase tables needed:
+    - data      : id, date, well_name, status, bfpd, bopd, injection_rate, last_test_date
     - locations : well_name, field, latitude, longitude
 
+Streamlit secrets (in .streamlit/secrets.toml or Streamlit Cloud):
+    [supabase]
+    url = "https://xxxx.supabase.co"
+    key = "your-anon-public-key"
+
 Daily workflow:
-    Append new rows to the 'data' tab with today's date.
+    Insert new rows into the 'data' table with today's date via Supabase
+    Table Editor, CSV import, or any SQL client.
     The app auto-treats the latest date as "current" and all rows as history.
 """
 
@@ -19,8 +25,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
-import gspread
-from google.oauth2.service_account import Credentials
+from supabase import create_client
 
 # ----------------------------------------------------------------------------
 # PAGE CONFIG
@@ -55,41 +60,47 @@ h1, h2, h3 { color: #e2e8f0 !important; }
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
-# GOOGLE SHEETS CONNECTION
+# SUPABASE CONNECTION
 # ----------------------------------------------------------------------------
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-
 @st.cache_resource
-def get_gsheet_client():
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=SCOPES)
-    return gspread.authorize(creds)
+def get_supabase():
+    return create_client(
+        st.secrets["supabase"]["url"],
+        st.secrets["supabase"]["key"],
+    )
 
-def get_sheet():
-    return get_gsheet_client().open_by_key(st.secrets["sheet"]["sheet_id"])
-
+@st.cache_data(ttl=30, show_spinner=False)
 def read_data():
-    ws = get_sheet().worksheet("data")
-    records = ws.get_all_records()
-    if not records:
+    """Fetches all rows from 'data' table.
+    Returns (current_df, history_df):
+      current_df = rows from the most recent date
+      history_df = all rows
+    """
+    client = get_supabase()
+    resp = client.table("data").select(
+        "date, well_name, status, bfpd, bopd, injection_rate, last_test_date"
+    ).order("date").execute()
+    if not resp.data:
         return None, pd.DataFrame(columns=DATA_COLS)
-    df = pd.DataFrame(records)
+    df = pd.DataFrame(resp.data)
     for col in ["bopd", "bfpd", "injection_rate"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     latest_date = df["date"].max()
     current_df = df[df["date"] == latest_date].drop(columns=["date"]).reset_index(drop=True)
     return current_df, df
 
+@st.cache_data(ttl=30, show_spinner=False)
 def read_locations():
-    ws = get_sheet().worksheet("locations")
-    records = ws.get_all_records()
-    if not records:
+    client = get_supabase()
+    resp = client.table("locations").select(
+        "well_name, field, latitude, longitude"
+    ).execute()
+    if not resp.data:
         return pd.DataFrame(columns=LOCATION_COLS)
-    df = pd.DataFrame(records)
+    df = pd.DataFrame(resp.data)
     for col in ["latitude", "longitude"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
 # ----------------------------------------------------------------------------
@@ -140,20 +151,20 @@ def generate_sample_locations():
 try:
     wells_df, history_df = read_data()
     locations_df = read_locations()
-    sheet_connected = True
+    db_connected = True
 except Exception as e:
-    st.error(f"Couldn't connect to Google Sheet — check your secrets configuration. Details: {e}")
+    st.error(f"Couldn't connect to Supabase — check your secrets configuration. Details: {e}")
     wells_df = None
     history_df = pd.DataFrame(columns=DATA_COLS)
     locations_df = pd.DataFrame(columns=LOCATION_COLS)
-    sheet_connected = False
+    db_connected = False
 
 using_sample = wells_df is None or wells_df.empty
 if using_sample:
     wells_df, history_df = generate_sample_data()
     locations_df = generate_sample_locations()
-    if sheet_connected:
-        st.info("No data yet — showing sample data. Add rows to the 'data' tab in your Google Sheet.")
+    if db_connected:
+        st.info("No data yet — showing sample data. Insert rows into the 'data' table in Supabase.")
 
 for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
@@ -170,7 +181,7 @@ if missing_coords.any() and not using_sample:
     st.warning(
         "These wells have no saved coordinates yet, so they won't appear on the map: "
         + ", ".join(wells_df.loc[missing_coords, "well_name"].tolist())
-        + ". Add them to the 'locations' tab in your Google Sheet."
+        + ". Add them to the 'locations' table in Supabase."
     )
 
 # ----------------------------------------------------------------------------
@@ -219,19 +230,13 @@ if not history_df.empty:
     dates = sorted(history_df["date"].unique())
     if len(dates) >= 2:
         prev_date, curr_date = dates[-2], dates[-1]
-        prev_df = history_df[history_df["date"] == prev_date]
-        curr_df = history_df[history_df["date"] == curr_date]
-
-        prev_inj  = int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
-        curr_inj  = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum())
+        prev_df = history_df[history_df["date"] == prev_date].copy()
+        curr_df = history_df[history_df["date"] == curr_date].copy()
+        prev_inj = int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
+        curr_inj = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum())
         injection_change = curr_inj - prev_inj
-
-        # bwpd derived on the fly for history rows
-        prev_df = prev_df.copy()
-        curr_df = curr_df.copy()
         prev_df["bwpd"] = (prev_df["bfpd"] - prev_df["bopd"]).clip(lower=0)
         curr_df["bwpd"] = (curr_df["bfpd"] - curr_df["bopd"]).clip(lower=0)
-
         water_prod_change   = int(curr_df["bwpd"].sum()) - int(prev_df["bwpd"].sum())
         water_source_change = (
             int(curr_df.loc[curr_df["status"] == "Water Source", "bwpd"].sum()) -
@@ -330,7 +335,6 @@ st.subheader("Total Production Trend")
 if agg_history.empty:
     st.caption("No history yet — add a few days of data to see the trend.")
 else:
-    # Build full trend df with bwpd and water_cut_pct derived per date
     trend_df = history_df.copy()
     trend_df["bwpd"] = (trend_df["bfpd"] - trend_df["bopd"]).clip(lower=0)
     trend_df["water_cut_pct"] = (
@@ -363,18 +367,18 @@ else:
         return fig
 
     with trend_tab1:
-        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",    "BOPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",   "BOPD"), use_container_width=True)
     with trend_tab2:
-        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",    "BFPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
     with trend_tab3:
-        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",   "BWPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",  "BWPD"), use_container_width=True)
     with trend_tab4:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg["water_cut_pct"],
-            mode="lines+markers",
+            mode="lines+markers", fill="tozeroy",
             line=dict(color="#ef4444", width=2),
-            fill="tozeroy", fillcolor="rgba(239,68,68,0.15)",
+            fillcolor="rgba(239,68,68,0.15)",
         ))
         fig_wc.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
@@ -424,7 +428,8 @@ with top_col:
 with detail_col:
     st.subheader("Well Decline Trend")
     top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["well_name"] if not filtered.empty else filtered["well_name"].iloc[0]
-    selected_well = st.selectbox("Select a well", filtered["well_name"].tolist(), index=filtered["well_name"].tolist().index(top_well))
+    selected_well = st.selectbox("Select a well", filtered["well_name"].tolist(),
+                                 index=filtered["well_name"].tolist().index(top_well))
     well_history = (
         history_df[history_df["well_name"] == selected_well].sort_values("date").copy()
         if not history_df.empty else pd.DataFrame()
@@ -462,20 +467,20 @@ with detail_col:
         with w_tab3:
             st.plotly_chart(make_well_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",  "BWPD"), use_container_width=True)
         with w_tab4:
-            fig_wc = go.Figure()
-            fig_wc.add_trace(go.Scatter(
+            fig_wc2 = go.Figure()
+            fig_wc2.add_trace(go.Scatter(
                 x=well_history["date"], y=well_history["water_cut_pct"],
                 mode="lines+markers", fill="tozeroy",
                 line=dict(color="#ef4444", width=2),
                 fillcolor="rgba(239,68,68,0.15)",
             ))
-            fig_wc.update_layout(
+            fig_wc2.update_layout(
                 height=300, margin=dict(l=0, r=0, t=10, b=0),
                 paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
                 font=dict(color="#94a3b8"),
                 xaxis=dict(gridcolor="#263144"),
                 yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
-            st.plotly_chart(fig_wc, use_container_width=True)
+            st.plotly_chart(fig_wc2, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # WELL TABLE
@@ -491,6 +496,6 @@ display_df = filtered[["well_name", "field", "status", "bfpd", "bopd", "bwpd",
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 if using_sample:
-    st.caption("⚠️ Showing sample data — add rows to the 'data' tab in your Google Sheet to see real data.")
+    st.caption("⚠️ Showing sample data — insert rows into the 'data' table in Supabase to see real data.")
 else:
-    st.caption("✅ Showing live shared data from Google Sheets.")
+    st.caption("✅ Showing live shared data from Supabase.")
