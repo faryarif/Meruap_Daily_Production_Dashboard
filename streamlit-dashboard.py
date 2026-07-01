@@ -71,13 +71,8 @@ def get_supabase():
 
 @st.cache_data(ttl=30, show_spinner=False)
 def read_data():
-    """Fetches all rows from 'data' table.
-    Returns (current_df, history_df):
-      current_df = rows from the most recent date
-      history_df = all rows
-    """
     client = get_supabase()
-    resp = client.table("data").select(
+    resp = client.table("well_data").select(
         "date, well_name, status, bfpd, bopd, injection_rate, last_test_date"
     ).order("date").execute()
     if not resp.data:
@@ -164,7 +159,7 @@ if using_sample:
     wells_df, history_df = generate_sample_data()
     locations_df = generate_sample_locations()
     if db_connected:
-        st.info("No data yet — showing sample data. Insert rows into the 'data' table in Supabase.")
+        st.info("No data yet — showing sample data. Insert rows into the 'well_data' table in Supabase.")
 
 for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
@@ -496,6 +491,6 @@ display_df = filtered[["well_name", "field", "status", "bfpd", "bopd", "bwpd",
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 if using_sample:
-    st.caption("⚠️ Showing sample data — insert rows into the 'data' table in Supabase to see real data.")
+    st.caption("⚠️ Showing sample data — insert rows into the 'well_data' table in Supabase to see real data.")
 else:
     st.caption("✅ Showing live shared data from Supabase.")
