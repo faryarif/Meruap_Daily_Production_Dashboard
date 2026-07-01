@@ -330,17 +330,60 @@ st.subheader("Total Production Trend")
 if agg_history.empty:
     st.caption("No history yet — add a few days of data to see the trend.")
 else:
-    fig_trend = go.Figure()
-    fig_trend.add_trace(go.Scatter(
-        x=agg_history["date"], y=agg_history["bopd"], mode="lines", fill="tozeroy",
-        line=dict(color="#38bdf8", width=2), fillcolor="rgba(56,189,248,0.25)",
-    ))
-    fig_trend.update_layout(
-        height=280, margin=dict(l=0, r=0, t=10, b=0),
-        paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-        font=dict(color="#94a3b8"),
-        xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="BOPD"))
-    st.plotly_chart(fig_trend, use_container_width=True)
+    # Build full trend df with bwpd and water_cut_pct derived per date
+    trend_df = history_df.copy()
+    trend_df["bwpd"] = (trend_df["bfpd"] - trend_df["bopd"]).clip(lower=0)
+    trend_df["water_cut_pct"] = (
+        trend_df["bwpd"] / trend_df["bfpd"].replace(0, np.nan) * 100
+    ).round(1).fillna(0)
+    trend_agg = trend_df.groupby("date").agg(
+        bfpd=("bfpd", "sum"),
+        bopd=("bopd", "sum"),
+        bwpd=("bwpd", "sum"),
+        water_cut_pct=("water_cut_pct", "mean"),
+    ).reset_index().sort_values("date")
+    trend_agg["water_cut_pct"] = trend_agg["water_cut_pct"].round(1)
+
+    trend_tab1, trend_tab2, trend_tab3, trend_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
+
+    def make_trend_fig(y_col, color, title, y_title):
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=trend_agg["date"], y=trend_agg[y_col],
+            mode="lines", fill="tozeroy",
+            line=dict(color=color, width=2),
+            fillcolor=color.replace(")", ", 0.2)").replace("rgb", "rgba") if "rgb" in color
+                      else color + "33",
+        ))
+        fig.update_layout(
+            height=280, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+            font=dict(color="#94a3b8"),
+            xaxis=dict(gridcolor="#263144"),
+            yaxis=dict(gridcolor="#263144", title=y_title))
+        return fig
+
+    with trend_tab1:
+        st.plotly_chart(make_trend_fig("bopd", "#38bdf8", "BOPD", "BOPD"), use_container_width=True)
+    with trend_tab2:
+        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "BFPD", "BFPD"), use_container_width=True)
+    with trend_tab3:
+        st.plotly_chart(make_trend_fig("bwpd", "#f59e0b", "BWPD", "BWPD"), use_container_width=True)
+    with trend_tab4:
+        fig_wc = go.Figure()
+        fig_wc.add_trace(go.Scatter(
+            x=trend_agg["date"], y=trend_agg["water_cut_pct"],
+            mode="lines+markers",
+            line=dict(color="#ef4444", width=2),
+            fill="tozeroy", fillcolor="rgba(239,68,68,0.15)",
+        ))
+        fig_wc.update_layout(
+            height=280, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+            font=dict(color="#94a3b8"),
+            xaxis=dict(gridcolor="#263144"),
+            yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
+        st.plotly_chart(fig_wc, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # INJECTION RATE TREND
