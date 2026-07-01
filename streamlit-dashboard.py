@@ -363,11 +363,11 @@ else:
         return fig
 
     with trend_tab1:
-        st.plotly_chart(make_trend_fig("bopd", "#38bdf8", "rgba(56,189,248,0.2)",  "BOPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",    "BOPD"), use_container_width=True)
     with trend_tab2:
-        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",    "BFPD"), use_container_width=True)
     with trend_tab3:
-        st.plotly_chart(make_trend_fig("bwpd", "#f59e0b", "rgba(245,158,11,0.2)",  "BWPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",   "BWPD"), use_container_width=True)
     with trend_tab4:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
@@ -456,11 +456,11 @@ with detail_col:
             return fig
 
         with w_tab1:
-            st.plotly_chart(make_well_fig("bopd", "#38bdf8", "rgba(56,189,248,0.2)",  "BOPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",   "BOPD"), use_container_width=True)
         with w_tab2:
             st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
         with w_tab3:
-            st.plotly_chart(make_well_fig("bwpd", "#f59e0b", "rgba(245,158,11,0.2)",  "BWPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)",  "BWPD"), use_container_width=True)
         with w_tab4:
             fig_wc = go.Figure()
             fig_wc.add_trace(go.Scatter(
