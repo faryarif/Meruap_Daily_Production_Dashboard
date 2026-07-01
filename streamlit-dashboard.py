@@ -425,20 +425,56 @@ with detail_col:
     st.subheader("Well Decline Trend")
     selected_well = st.selectbox("Select a well", filtered["well_name"].tolist())
     well_history = (
-        history_df[history_df["well_name"] == selected_well].sort_values("date")
+        history_df[history_df["well_name"] == selected_well].sort_values("date").copy()
         if not history_df.empty else pd.DataFrame()
     )
     if well_history.empty:
         st.caption(f"No history yet for {selected_well} — add multiple days of data to build this chart.")
     else:
-        fig_decline = px.line(well_history, x="date", y="bopd")
-        fig_decline.update_traces(line=dict(color="#f59e0b", width=2))
-        fig_decline.update_layout(
-            height=300, margin=dict(l=0, r=0, t=10, b=0),
-            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-            font=dict(color="#94a3b8"),
-            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="BOPD"))
-        st.plotly_chart(fig_decline, use_container_width=True)
+        well_history["bwpd"] = (well_history["bfpd"] - well_history["bopd"]).clip(lower=0)
+        well_history["water_cut_pct"] = (
+            well_history["bwpd"] / well_history["bfpd"].replace(0, np.nan) * 100
+        ).round(1).fillna(0)
+
+        w_tab1, w_tab2, w_tab3, w_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
+
+        def make_well_fig(y_col, line_color, fill_color, y_title):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=well_history["date"], y=well_history[y_col],
+                mode="lines+markers", fill="tozeroy",
+                line=dict(color=line_color, width=2),
+                fillcolor=fill_color,
+            ))
+            fig.update_layout(
+                height=300, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+                font=dict(color="#94a3b8"),
+                xaxis=dict(gridcolor="#263144"),
+                yaxis=dict(gridcolor="#263144", title=y_title))
+            return fig
+
+        with w_tab1:
+            st.plotly_chart(make_well_fig("bopd", "#38bdf8", "rgba(56,189,248,0.2)",  "BOPD"), use_container_width=True)
+        with w_tab2:
+            st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"), use_container_width=True)
+        with w_tab3:
+            st.plotly_chart(make_well_fig("bwpd", "#f59e0b", "rgba(245,158,11,0.2)",  "BWPD"), use_container_width=True)
+        with w_tab4:
+            fig_wc = go.Figure()
+            fig_wc.add_trace(go.Scatter(
+                x=well_history["date"], y=well_history["water_cut_pct"],
+                mode="lines+markers", fill="tozeroy",
+                line=dict(color="#ef4444", width=2),
+                fillcolor="rgba(239,68,68,0.15)",
+            ))
+            fig_wc.update_layout(
+                height=300, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
+                font=dict(color="#94a3b8"),
+                xaxis=dict(gridcolor="#263144"),
+                yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
+            st.plotly_chart(fig_wc, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # WELL TABLE
