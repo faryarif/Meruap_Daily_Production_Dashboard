@@ -29,7 +29,8 @@ from supabase import create_client
 # ----------------------------------------------------------------------------
 # PAGE CONFIG
 # ----------------------------------------------------------------------------
-st.set_page_config(page_title="Meruap Dashboard", page_icon="🛢️", layout="wide")
+st.set_page_config(page_title="Meruap Dashboard", page_icon="🛢️", layout="wide",
+                   initial_sidebar_state="expanded")
 
 STATUS_COLORS = {
     "Oil": "#22c55e",
@@ -41,8 +42,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_COLS     = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
-LOCATION_COLS = ["well_name", "field", "latitude", "longitude"]
+DATA_COLS     = ["date", "alias", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+LOCATION_COLS = ["alias", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -58,6 +59,7 @@ h1, h2, h3 { color: #e2e8f0 !important; }
 [data-testid="stToolbar"] { display: none; }
 [data-testid="stDecoration"] { display: none; }
 header[data-testid="stHeader"] { display: none; }
+[data-testid="collapsedControl"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,8 +75,7 @@ def get_supabase():
 
 def test_connection():
     try:
-        client = get_supabase()
-        client.table("well_data").select("well_name").limit(1).execute()
+        get_supabase().table("well_data").select("well_name").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -237,7 +238,6 @@ with st.sidebar:
                         use_container_width=True, hide_index=True
                     )
                 try:
-                    existing_dates = set(pd.read_csv if False else [])  # placeholder
                     hist_resp = get_supabase().table("well_data").select("date").execute()
                     existing_dates = set(r["date"] for r in hist_resp.data) if hist_resp.data else set()
                     incoming_dates = set(raw["date"].dropna().unique())
