@@ -5,7 +5,7 @@ Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - well_data : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
+    - HeaderID : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
     - locations : ALIAS, field, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
@@ -14,7 +14,7 @@ Streamlit secrets (.streamlit/secrets.toml):
     key = "your-anon-public-key"
 
 Daily workflow:
-    Drag & drop Excel/CSV in the sidebar → validates → appends to well_data table.
+    Drag & drop Excel/CSV in the sidebar → validates → appends to HeaderID table.
     The app auto-treats the latest date as "current" and all rows as history.
 """
 
@@ -75,7 +75,7 @@ def get_supabase():
 
 def test_connection():
     try:
-        get_supabase().table("well_data").select("ALIAS").limit(1).execute()
+        get_supabase().table("").select("ALIAS").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -86,7 +86,7 @@ def test_connection():
 @st.cache_data(ttl=30, show_spinner=False)
 def read_data():
     client = get_supabase()
-    resp = client.table("well_data").select(
+    resp = client.table("HeaderID").select(
         "date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date"
     ).order("date").execute()
     if not resp.data:
@@ -115,7 +115,7 @@ def read_locations():
 # ----------------------------------------------------------------------------
 # ETL — WRITE + VALIDATE
 # ----------------------------------------------------------------------------
-def write_well_data(df: pd.DataFrame):
+def write_HeaderID(df: pd.DataFrame):
     client = get_supabase()
     rows = df.to_dict(orient="records")
     clean_rows = []
@@ -125,7 +125,7 @@ def write_well_data(df: pd.DataFrame):
                 str(v) if isinstance(v, pd.Timestamp) else v)
             for k, v in row.items()
         })
-    client.table("well_data").insert(clean_rows).execute()
+    client.table("HeaderID").insert(clean_rows).execute()
 
 def validate_etl(df: pd.DataFrame):
     errors = []
@@ -238,7 +238,7 @@ with st.sidebar:
                         use_container_width=True, hide_index=True
                     )
                 try:
-                    hist_resp = get_supabase().table("well_data").select("date").execute()
+                    hist_resp = get_supabase().table("HeaderID").select("date").execute()
                     existing_dates = set(r["date"] for r in hist_resp.data) if hist_resp.data else set()
                     incoming_dates = set(raw["date"].dropna().unique())
                     overlap = existing_dates & incoming_dates
@@ -249,7 +249,7 @@ with st.sidebar:
 
                 if st.button("📤 Append to Supabase", type="primary", use_container_width=True):
                     try:
-                        write_well_data(raw[DATA_COLS])
+                        write_HeaderID(raw[DATA_COLS])
                         st.cache_data.clear()
                         st.success(f"✅ {len(raw)} rows appended!")
                         st.rerun()
