@@ -12,10 +12,6 @@ Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
     url = "https://xxxx.supabase.co"
     key = "your-anon-public-key"
-
-Daily workflow:
-    Drag & drop Excel/CSV in the sidebar → validates → appends to ProdWellBasis table.
-    The app auto-treats the latest date as "current" and all rows as history.
 """
 
 import streamlit as st
@@ -42,7 +38,7 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+DATA_PROD_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
 LOCATION_COLS = ["ALIAS", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
@@ -90,7 +86,7 @@ def read_data():
         "date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date"
     ).order("date").execute()
     if not resp.data:
-        return None, pd.DataFrame(columns=DATA_COLS)
+        return None, pd.DataFrame(columns=DATA_PROD_COLS)
     df = pd.DataFrame(resp.data)
     for col in ["bopd", "bfpd", "injection_rate"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -122,7 +118,7 @@ try:
 except Exception as e:
     st.error(f"Couldn't connect to Supabase — check your secrets configuration. Details: {e}")
     wells_df = None
-    history_df = pd.DataFrame(columns=DATA_COLS)
+    history_df = pd.DataFrame(columns=DATA_PROD_COLS)
     locations_df = pd.DataFrame(columns=LOCATION_COLS)
     db_connected = False
 
