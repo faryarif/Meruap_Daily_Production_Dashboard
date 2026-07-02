@@ -39,7 +39,7 @@ STATUS_COLORS = {
 }
 
 DATA_PROD_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
-LOCATION_COLS = ["ALIAS", "field", "latitude", "longitude"]
+LOCATION_HEAD_COLS = ["ALIAS", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -102,7 +102,7 @@ def read_locations():
         "ALIAS, field, latitude, longitude"
     ).execute()
     if not resp.data:
-        return pd.DataFrame(columns=LOCATION_COLS)
+        return pd.DataFrame(columns=LOCATION_HEAD_COLS)
     df = pd.DataFrame(resp.data)
     for col in ["latitude", "longitude"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -119,7 +119,7 @@ except Exception as e:
     st.error(f"Couldn't connect to Supabase — check your secrets configuration. Details: {e}")
     wells_df = None
     history_df = pd.DataFrame(columns=DATA_PROD_COLS)
-    locations_df = pd.DataFrame(columns=LOCATION_COLS)
+    locations_df = pd.DataFrame(columns=LOCATION_HEAD_COLS)
     db_connected = False
 
 using_sample = wells_df is None or wells_df.empty
