@@ -59,7 +59,7 @@ h1, h2, h3 { color: #e2e8f0 !important; }
 [data-testid="stToolbar"] { display: none; }
 [data-testid="stDecoration"] { display: none; }
 header[data-testid="stHeader"] { display: none; }
-[data-testid="collapsedControl"] { display: none; }
+[data-testid="collapsedControl"] { display: flex !important; }
 </style>
 """, unsafe_allow_html=True)
 
