@@ -6,7 +6,7 @@ Run locally:
 
 Supabase tables needed:
     - ProdWellBasis : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
-    - locations : ALIAS, field, latitude, longitude
+    - HeaderID : ALIAS, field, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
@@ -102,7 +102,7 @@ def read_data():
 @st.cache_data(ttl=30, show_spinner=False)
 def read_locations():
     client = get_supabase()
-    resp = client.table("locations").select(
+    resp = client.table("HeaderID").select(
         "ALIAS, field, latitude, longitude"
     ).execute()
     if not resp.data:
@@ -147,47 +147,6 @@ def validate_etl(df: pd.DataFrame):
     if bad:
         errors.append(f"Unrecognized status: {', '.join(sorted(bad))}")
     return errors
-
-# ----------------------------------------------------------------------------
-# SAMPLE DATA
-# ----------------------------------------------------------------------------
-@st.cache_data
-def generate_sample_data():
-    rng = np.random.default_rng(42)
-    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    base_rows = []
-    for name in names:
-        base_rate = rng.integers(80, 500)
-        roll = rng.random()
-        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
-        bopd_val = int(base_rate) if status == "Oil" else 0
-        bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
-        base_rows.append({
-            "ALIAS": name, "status": status,
-            "bfpd": bfpd_val, "bopd": bopd_val,
-            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
-            "last_test_date": "2026-06-23",
-        })
-    current_df = pd.DataFrame(base_rows)
-    history_rows = []
-    for d in range(14):
-        date_str = (datetime(2026, 6, 23) - pd.Timedelta(days=13 - d)).strftime("%Y-%m-%d")
-        for row in base_rows:
-            history_rows.append({**row, "date": date_str})
-    return current_df, pd.DataFrame(history_rows)
-
-@st.cache_data
-def generate_sample_locations():
-    rng = np.random.default_rng(42)
-    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    fields = ["North Block", "South Block", "East Flank"]
-    return pd.DataFrame([{
-        "ALIAS": name, "field": fields[i % 3],
-        "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
-        "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
-    } for i, name in enumerate(names)])
 
 # ----------------------------------------------------------------------------
 # SIDEBAR — CONNECTION STATUS + ETL
@@ -299,7 +258,7 @@ if missing_coords.any() and not using_sample:
     st.warning(
         "These wells have no saved coordinates: "
         + ", ".join(wells_df.loc[missing_coords, "ALIAS"].tolist())
-        + ". Add them to the 'locations' table in Supabase."
+        + ". Add them to the 'HeaderID' table in Supabase."
     )
 
 # ----------------------------------------------------------------------------
