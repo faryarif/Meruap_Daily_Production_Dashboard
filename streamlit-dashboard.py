@@ -6,7 +6,7 @@ Run locally:
 
 Supabase tables needed:
     - ProdWellBasis : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
-    - HeaderID : ALIAS, field, latitude, longitude
+    - HeaderID      : ALIAS, field, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
@@ -69,9 +69,10 @@ def get_supabase():
         st.secrets["supabase"]["key"],
     )
 
+# FIX 1: use correct table name in test_connection
 def test_connection():
     try:
-        get_supabase().table("").select("ALIAS").limit(1).execute()
+        get_supabase().table("ProdWellBasis").select("ALIAS").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -107,6 +108,57 @@ def read_locations():
     for col in ["latitude", "longitude"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
+
+# ----------------------------------------------------------------------------
+# FIX 2: sample data generators (previously missing, caused NameError)
+# ----------------------------------------------------------------------------
+@st.cache_data
+def generate_sample_data():
+    rng = np.random.default_rng(42)
+    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
+             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    base_rows = []
+    for name in names:
+        base_rate = rng.integers(80, 500)
+        roll = rng.random()
+        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
+        bopd_val = int(base_rate) if status == "Oil" else 0
+        bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
+        base_rows.append({
+            "ALIAS": name, "status": status,
+            "bfpd": bfpd_val, "bopd": bopd_val,
+            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
+            "last_test_date": "2026-06-23",
+        })
+    current_df = pd.DataFrame(base_rows)
+    history_rows = []
+    for d in range(14):
+        date_str = (datetime(2026, 6, 23) - pd.Timedelta(days=13 - d)).strftime("%Y-%m-%d")
+        for row in base_rows:
+            history_rows.append({**row, "date": date_str})
+    return current_df, pd.DataFrame(history_rows)
+
+@st.cache_data
+def generate_sample_locations():
+    rng = np.random.default_rng(42)
+    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
+             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
+    fields = ["North Block", "South Block", "East Flank"]
+    return pd.DataFrame([{
+        "ALIAS": name, "field": fields[i % 3],
+        "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
+        "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
+    } for i, name in enumerate(names)])
+
+# ----------------------------------------------------------------------------
+# FIX 3: call test_connection in sidebar so it's actually used
+# ----------------------------------------------------------------------------
+with st.sidebar:
+    ok, msg = test_connection()
+    if ok:
+        st.success("✅ Supabase connected")
+    else:
+        st.error(f"❌ {msg}")
 
 # ----------------------------------------------------------------------------
 # LOAD DATA
@@ -462,6 +514,6 @@ display_df = filtered[["ALIAS", "field", "status", "bfpd", "bopd", "bwpd",
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 if using_sample:
-    st.caption("⚠️ Showing sample data — upload a file in the sidebar to load real data.")
+    st.caption("⚠️ Showing sample data — upload a file in the ETL page to load real data.")
 else:
     st.caption("✅ Showing live shared data from Supabase.")
