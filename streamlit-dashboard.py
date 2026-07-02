@@ -5,8 +5,8 @@ Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - well_data : id, date, well_name, status, bfpd, bopd, injection_rate, last_test_date
-    - locations : well_name, field, latitude, longitude
+    - well_data : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
+    - locations : ALIAS, field, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
@@ -42,8 +42,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_COLS     = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
-LOCATION_COLS = ["well_name", "field", "latitude", "longitude"]
+DATA_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+LOCATION_COLS = ["ALIAS", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -75,7 +75,7 @@ def get_supabase():
 
 def test_connection():
     try:
-        get_supabase().table("well_data").select("well_name").limit(1).execute()
+        get_supabase().table("well_data").select("ALIAS").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -87,7 +87,7 @@ def test_connection():
 def read_data():
     client = get_supabase()
     resp = client.table("well_data").select(
-        "date, well_name, status, bfpd, bopd, injection_rate, last_test_date"
+        "date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date"
     ).order("date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_COLS)
@@ -103,7 +103,7 @@ def read_data():
 def read_locations():
     client = get_supabase()
     resp = client.table("locations").select(
-        "well_name, field, latitude, longitude"
+        "ALIAS, field, latitude, longitude"
     ).execute()
     if not resp.data:
         return pd.DataFrame(columns=LOCATION_COLS)
@@ -129,13 +129,13 @@ def write_well_data(df: pd.DataFrame):
 
 def validate_etl(df: pd.DataFrame):
     errors = []
-    required = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+    required = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
     missing = set(required) - set(df.columns)
     if missing:
         errors.append(f"Missing columns: {', '.join(sorted(missing))}")
         return errors
-    if df["well_name"].isna().any() or (df["well_name"].astype(str).str.strip() == "").any():
-        errors.append("Some rows have empty well_name")
+    if df["ALIAS"].isna().any() or (df["ALIAS"].astype(str).str.strip() == "").any():
+        errors.append("Some rows have empty ALIAS")
     if df["date"].isna().any():
         errors.append("Some rows have empty date")
     if (pd.to_numeric(df["bopd"], errors="coerce") < 0).any():
@@ -164,7 +164,7 @@ def generate_sample_data():
         bopd_val = int(base_rate) if status == "Oil" else 0
         bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
         base_rows.append({
-            "well_name": name, "status": status,
+            "ALIAS": name, "status": status,
             "bfpd": bfpd_val, "bopd": bopd_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
@@ -184,7 +184,7 @@ def generate_sample_locations():
              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
     fields = ["North Block", "South Block", "East Flank"]
     return pd.DataFrame([{
-        "well_name": name, "field": fields[i % 3],
+        "ALIAS": name, "field": fields[i % 3],
         "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
         "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
     } for i, name in enumerate(names)])
@@ -233,7 +233,7 @@ with st.sidebar:
                 st.success("✅ Validation passed")
                 with st.expander("Preview data", expanded=False):
                     st.dataframe(
-                        raw[["date", "well_name", "status", "bfpd", "bopd",
+                        raw[["date", "ALIAS", "status", "bfpd", "bopd",
                              "bwpd", "water_cut_pct", "injection_rate", "last_test_date"]],
                         use_container_width=True, hide_index=True
                     )
@@ -261,7 +261,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("**Expected columns:**")
-    st.code("date, well_name, status,\nbfpd, bopd, injection_rate,\nlast_test_date", language="text")
+    st.code("date, ALIAS, status,\nbfpd, bopd, injection_rate,\nlast_test_date", language="text")
 
 # ----------------------------------------------------------------------------
 # LOAD DATA
@@ -288,7 +288,7 @@ for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
 
-wells_df = wells_df.merge(locations_df, on="well_name", how="left")
+wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
 wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
 wells_df["water_cut_pct"] = (
     wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100
@@ -298,7 +298,7 @@ missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
 if missing_coords.any() and not using_sample:
     st.warning(
         "These wells have no saved coordinates: "
-        + ", ".join(wells_df.loc[missing_coords, "well_name"].tolist())
+        + ", ".join(wells_df.loc[missing_coords, "ALIAS"].tolist())
         + ". Add them to the 'locations' table in Supabase."
     )
 
@@ -332,7 +332,7 @@ if selected_date_str and not history_df.empty and selected_date_str in history_d
     for col in ["injection_rate", "last_test_date"]:
         if col not in snap_df.columns:
             snap_df[col] = "N/A" if col == "last_test_date" else 0
-    snap_df = snap_df.merge(locations_df, on="well_name", how="left")
+    snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
     snap_df["bwpd"] = (snap_df["bfpd"] - snap_df["bopd"]).clip(lower=0)
     snap_df["water_cut_pct"] = (
         snap_df["bwpd"] / snap_df["bfpd"].replace(0, np.nan) * 100
@@ -437,10 +437,10 @@ with map_col:
     fig_map = px.scatter_map(
         mappable, lat="latitude", lon="longitude", color="status",
         color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
-        hover_name="well_name",
+        hover_name="ALIAS",
         hover_data={"field": True, "bopd": True, "water_cut_pct": True,
                     "latitude": False, "longitude": False},
-        text="well_name", map_style="open-street-map",
+        text="ALIAS", map_style="open-street-map",
     )
     fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=11))
     fig_map.update_layout(
@@ -544,7 +544,7 @@ top_col, detail_col = st.columns(2)
 with top_col:
     st.subheader("Top Producing Wells")
     top_wells = filtered.sort_values("bopd", ascending=False).head(8)
-    fig_top = px.bar(top_wells, x="well_name", y="bopd", color_discrete_sequence=["#38bdf8"])
+    fig_top = px.bar(top_wells, x="ALIAS", y="bopd", color_discrete_sequence=["#38bdf8"])
     fig_top.update_layout(
         height=300, margin=dict(l=0, r=0, t=10, b=0),
         paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
@@ -553,11 +553,11 @@ with top_col:
 
 with detail_col:
     st.subheader("Well Decline Trend")
-    top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["well_name"] if not filtered.empty else filtered["well_name"].iloc[0]
-    selected_well = st.selectbox("Select a well", filtered["well_name"].tolist(),
-                                 index=filtered["well_name"].tolist().index(top_well))
+    top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else filtered["ALIAS"].iloc[0]
+    selected_well = st.selectbox("Select a well", filtered["ALIAS"].tolist(),
+                                 index=filtered["ALIAS"].tolist().index(top_well))
     well_history = (
-        history_df[history_df["well_name"] == selected_well].sort_values("date").copy()
+        history_df[history_df["ALIAS"] == selected_well].sort_values("date").copy()
         if not history_df.empty else pd.DataFrame()
     )
     if well_history.empty:
@@ -607,9 +607,9 @@ with detail_col:
 # WELL TABLE
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
-display_df = filtered[["well_name", "field", "status", "bfpd", "bopd", "bwpd",
+display_df = filtered[["ALIAS", "field", "status", "bfpd", "bopd", "bwpd",
                         "water_cut_pct", "injection_rate", "last_test_date"]].rename(
-    columns={"well_name": "Well", "field": "Field", "status": "Status",
+    columns={"ALIAS": "Well", "field": "Field", "status": "Status",
              "bfpd": "BFPD", "bopd": "BOPD", "bwpd": "BWPD",
              "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate",
              "last_test_date": "Last Test"}
