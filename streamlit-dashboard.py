@@ -42,8 +42,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_COLS     = ["date", "alias", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
-LOCATION_COLS = ["alias", "field", "latitude", "longitude"]
+DATA_COLS     = ["date", "well_name", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+LOCATION_COLS = ["well_name", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
