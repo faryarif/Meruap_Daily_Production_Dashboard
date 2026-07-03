@@ -38,8 +38,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_PROD_COLS     = ["date", "ALIAS", "status", "OIL", "WATER", "injection_rate", "last_test_date"]
-LOCATION_HEAD_COLS = ["ALIAS", "field", "latitude", "longitude"]
+DATA_PROD_COLS     = ["date", "UNIQUEID", "status", "OIL", "WATER", "injection_rate", "last_test_date"]
+LOCATION_HEAD_COLS = ["UNIQUEID", "ALIAS", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -72,7 +72,7 @@ def get_supabase():
 # FIX 1: use correct table name in test_connection
 def test_connection():
     try:
-        get_supabase().table("ProdWellBasiss").select("ALIAS").limit(1).execute()
+        get_supabase().table("ProdWellBasiss").select("UNIQUEID").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -84,14 +84,15 @@ def test_connection():
 def read_data():
     client = get_supabase()
     resp = client.table("ProdWellBasiss").select(
-        "date, ALIAS, status, OIL, WATER, injection_rate, last_test_date"
-    ).order("date").execute()
+        "Date, UNIQUEID, status, OIL, WATER, injection_rate, last_test_date"
+    ).order("Date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_PROD_COLS)
     df = pd.DataFrame(resp.data)
     for col in ["OIL", "WATER", "injection_rate"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df = df.rename(columns={"Date": "date"})
     # Derive bfpd = OIL + WATER
     df["bfpd"] = df["OIL"] + df["WATER"]
     latest_date = df["date"].max()
@@ -102,7 +103,7 @@ def read_data():
 def read_locations():
     client = get_supabase()
     resp = client.table("HeaderID").select(
-        "ALIAS, field, latitude, longitude"
+        "UNIQUEID, ALIAS, field, latitude, longitude"
     ).execute()
     if not resp.data:
         return pd.DataFrame(columns=LOCATION_HEAD_COLS)
@@ -127,7 +128,7 @@ def generate_sample_data():
         oil_val   = int(base_rate) if status == "Oil" else 0
         water_val = int(oil_val * 0.3) if status == "Oil" else 0
         base_rows.append({
-            "ALIAS": name, "status": status,
+            "UNIQUEID": name, "status": status,
             "OIL": oil_val, "WATER": water_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
             "last_test_date": "2026-06-23",
@@ -147,7 +148,7 @@ def generate_sample_locations():
              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
     fields = ["North Block", "South Block", "East Flank"]
     return pd.DataFrame([{
-        "ALIAS": name, "field": fields[i % 3],
+        "UNIQUEID": name, "ALIAS": name, "field": fields[i % 3],
         "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
         "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
     } for i, name in enumerate(names)])
@@ -187,7 +188,7 @@ for col in ["injection_rate", "last_test_date"]:
     if col not in wells_df.columns:
         wells_df[col] = "N/A" if col == "last_test_date" else 0
 
-wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
+wells_df = wells_df.merge(locations_df, on="UNIQUEID", how="left")
 # Derive bfpd = OIL + WATER
 wells_df["bfpd"]         = wells_df["OIL"] + wells_df["WATER"]
 wells_df["water_cut_pct"] = (
@@ -232,7 +233,7 @@ if selected_date_str and not history_df.empty and selected_date_str in history_d
     for col in ["injection_rate", "last_test_date"]:
         if col not in snap_df.columns:
             snap_df[col] = "N/A" if col == "last_test_date" else 0
-    snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
+    snap_df = snap_df.merge(locations_df, on="UNIQUEID", how="left")
     snap_df["bfpd"]         = snap_df["OIL"] + snap_df["WATER"]
     snap_df["water_cut_pct"] = (
         snap_df["WATER"] / snap_df["bfpd"].replace(0, np.nan) * 100
@@ -338,7 +339,7 @@ with map_col:
         mappable, lat="latitude", lon="longitude", color="status",
         color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
         hover_name="ALIAS",
-        hover_data={"field": True, "bopd": True, "water_cut_pct": True,
+        hover_data={"field": True, "OIL": True, "water_cut_pct": True,
                     "latitude": False, "longitude": False},
         text="ALIAS", map_style="open-street-map",
     )
@@ -448,7 +449,7 @@ with top_col:
     fig_top.update_layout(
         height=300, margin=dict(l=0, r=0, t=10, b=0),
         paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-        font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title="BOPD")
+        font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title="OIL (BOPD)")
     st.plotly_chart(fig_top, use_container_width=True)
 
 with detail_col:
@@ -457,7 +458,7 @@ with detail_col:
     selected_well = st.selectbox("Select a well", filtered["ALIAS"].tolist(),
                                  index=filtered["ALIAS"].tolist().index(top_well))
     well_history = (
-        history_df[history_df["ALIAS"] == selected_well].sort_values("date").copy()
+        history_df[history_df["UNIQUEID"] == filtered.loc[filtered["ALIAS"] == selected_well, "UNIQUEID"].iloc[0]].sort_values("date").copy()
         if not history_df.empty else pd.DataFrame()
     )
     if well_history.empty:
