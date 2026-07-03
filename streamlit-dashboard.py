@@ -450,8 +450,7 @@ with top_col:
 
 with detail_col:
     st.subheader("Well Decline Trend")
-   top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["ALIAS"] \
-    if not filtered.empty else filtered["ALIAS"].iloc[0]["ALIAS"]
+    top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else filtered["ALIAS"].iloc[0]
     selected_well = st.selectbox("Select a well", filtered["ALIAS"].tolist(),
                                  index=filtered["ALIAS"].tolist().index(top_well))
     well_history = (
