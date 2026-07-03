@@ -240,8 +240,10 @@ with col_filter:
 
 # Filter wells by selected snapshot date
 if selected_date_str and not history_df.empty and selected_date_str in history_df["date"].values:
-    snap_df = history_df[history_df["date"] == selected_date_str].drop(
-        columns=["date"]).reset_index(drop=True)
+    # For the selected date, show each well's most recent data UP TO that date
+    snap_hist = history_df[history_df["date"] <= selected_date_str].copy()
+    idx = snap_hist.groupby("UNIQUEID")["date"].idxmax()
+    snap_df = snap_hist.loc[idx].drop(columns=["date"]).reset_index(drop=True)
     snap_df["bfpd"] = snap_df["OIL"] + snap_df["WATER"]
     snap_df["water_cut_pct"] = (
         snap_df["WATER"] / snap_df["bfpd"].replace(0, np.nan) * 100
