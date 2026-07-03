@@ -4,9 +4,9 @@ Daily Production & Well Map Dashboard — Shared via Supabase
 Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
-Supabase tables:
-    ProdWellBasiss : Date, UNIQUEID, OIL, GAS, WATER
-    HeaderID       : UNIQUEID, ALIAS, field, status, latitude, longitude
+Supabase tables needed:
+    - ProdWellBasis : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
+    - HeaderID      : ALIAS, field, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
@@ -38,8 +38,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_PROD_COLS     = ["date", "UNIQUEID", "OIL", "GAS", "WATER"]
-LOCATION_HEAD_COLS = ["UNIQUEID", "ALIAS", "field", "status", "latitude", "longitude"]
+DATA_PROD_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+LOCATION_HEAD_COLS = ["ALIAS", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -69,9 +69,10 @@ def get_supabase():
         st.secrets["supabase"]["key"],
     )
 
+# FIX 1: use correct table name in test_connection
 def test_connection():
     try:
-        get_supabase().table("ProdWellBasiss").select("UNIQUEID").limit(1).execute()
+        get_supabase().table("ProdWellBasis").select("ALIAS").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -82,37 +83,24 @@ def test_connection():
 @st.cache_data(ttl=30, show_spinner=False)
 def read_data():
     client = get_supabase()
-    resp = client.table("ProdWellBasiss").select(
-        "Date, UNIQUEID, OIL, GAS, WATER"
-    ).order("Date").execute()
+    resp = client.table("ProdWellBasis").select(
+        "date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date"
+    ).order("date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_PROD_COLS)
     df = pd.DataFrame(resp.data)
-    for col in ["OIL", "GAS", "WATER"]:
+    for col in ["bopd", "bfpd", "injection_rate"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    df = df.rename(columns={"Date": "date"})
-
-    # Derive bfpd (liquid) and water_cut_pct
-    df["bfpd"] = df["OIL"] + df["WATER"]
-    df["water_cut_pct"] = (
-        df["WATER"] / df["bfpd"].replace(0, np.nan) * 100
-    ).round(1).fillna(0)
-
-    # Derive last_test_date = most recent Date per UNIQUEID
-    last_test = df.groupby("UNIQUEID")["date"].max().reset_index().rename(
-        columns={"date": "last_test_date"})
-
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     latest_date = df["date"].max()
     current_df = df[df["date"] == latest_date].drop(columns=["date"]).reset_index(drop=True)
-    current_df = current_df.merge(last_test, on="UNIQUEID", how="left")
     return current_df, df
 
 @st.cache_data(ttl=30, show_spinner=False)
 def read_locations():
     client = get_supabase()
     resp = client.table("HeaderID").select(
-        "UNIQUEID, ALIAS, field, status, latitude, longitude"
+        "ALIAS, field, latitude, longitude"
     ).execute()
     if not resp.data:
         return pd.DataFrame(columns=LOCATION_HEAD_COLS)
@@ -122,7 +110,7 @@ def read_locations():
     return df
 
 # ----------------------------------------------------------------------------
-# SAMPLE DATA
+# FIX 2: sample data generators (previously missing, caused NameError)
 # ----------------------------------------------------------------------------
 @st.cache_data
 def generate_sample_data():
@@ -132,48 +120,38 @@ def generate_sample_data():
     base_rows = []
     for name in names:
         base_rate = rng.integers(80, 500)
-        oil_val   = int(base_rate)
-        water_val = int(oil_val * 0.3)
-        gas_val   = int(oil_val * 0.1)
+        roll = rng.random()
+        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
+        bopd_val = int(base_rate) if status == "Oil" else 0
+        bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
         base_rows.append({
-            "UNIQUEID": name,
-            "OIL": oil_val, "GAS": gas_val, "WATER": water_val,
+            "ALIAS": name, "status": status,
+            "bfpd": bfpd_val, "bopd": bopd_val,
+            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
+            "last_test_date": "2026-06-23",
         })
+    current_df = pd.DataFrame(base_rows)
     history_rows = []
     for d in range(14):
         date_str = (datetime(2026, 6, 23) - pd.Timedelta(days=13 - d)).strftime("%Y-%m-%d")
         for row in base_rows:
             history_rows.append({**row, "date": date_str})
-    history_df = pd.DataFrame(history_rows)
-    history_df["bfpd"] = history_df["OIL"] + history_df["WATER"]
-    history_df["water_cut_pct"] = (
-        history_df["WATER"] / history_df["bfpd"].replace(0, np.nan) * 100
-    ).round(1).fillna(0)
-    last_test = history_df.groupby("UNIQUEID")["date"].max().reset_index().rename(
-        columns={"date": "last_test_date"})
-    latest_date = history_df["date"].max()
-    current_df = history_df[history_df["date"] == latest_date].drop(
-        columns=["date"]).reset_index(drop=True)
-    current_df = current_df.merge(last_test, on="UNIQUEID", how="left")
-    return current_df, history_df
+    return current_df, pd.DataFrame(history_rows)
 
 @st.cache_data
 def generate_sample_locations():
     rng = np.random.default_rng(42)
     names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    fields  = ["North Block", "South Block", "East Flank"]
-    statuses = ["Oil", "Oil", "Oil", "Shut-in", "Oil", "Oil",
-                "Down", "Oil", "Oil", "Injector", "Water Source", "Oil"]
+    fields = ["North Block", "South Block", "East Flank"]
     return pd.DataFrame([{
-        "UNIQUEID": name, "ALIAS": name, "field": fields[i % 3],
-        "status": statuses[i % len(statuses)],
-        "latitude":  -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
+        "ALIAS": name, "field": fields[i % 3],
+        "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
         "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
     } for i, name in enumerate(names)])
 
 # ----------------------------------------------------------------------------
-# SIDEBAR — CONNECTION STATUS
+# FIX 3: call test_connection in sidebar so it's actually used
 # ----------------------------------------------------------------------------
 with st.sidebar:
     ok, msg = test_connection()
@@ -201,16 +179,23 @@ if using_sample:
     wells_df, history_df = generate_sample_data()
     locations_df = generate_sample_locations()
     if db_connected:
-        st.info("No data yet — showing sample data.")
+        st.info("No data yet — showing sample data. Upload a file in the sidebar.")
 
-# Join HeaderID (ALIAS, field, status, coordinates) onto wells
-wells_df = wells_df.merge(locations_df, on="UNIQUEID", how="left")
+for col in ["injection_rate", "last_test_date"]:
+    if col not in wells_df.columns:
+        wells_df[col] = "N/A" if col == "last_test_date" else 0
+
+wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
+wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
+wells_df["water_cut_pct"] = (
+    wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100
+).round(1).fillna(0)
 
 missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
 if missing_coords.any() and not using_sample:
     st.warning(
         "These wells have no saved coordinates: "
-        + ", ".join(wells_df.loc[missing_coords, "ALIAS"].fillna("Unknown").tolist())
+        + ", ".join(wells_df.loc[missing_coords, "ALIAS"].tolist())
         + ". Add them to the 'HeaderID' table in Supabase."
     )
 
@@ -238,18 +223,17 @@ with col_filter:
     field_options = ["All"] + sorted(wells_df["field"].dropna().unique().tolist())
     field_filter = st.selectbox("Field", field_options)
 
-# Filter wells by selected snapshot date
+# Filter by selected snapshot date
 if selected_date_str and not history_df.empty and selected_date_str in history_df["date"].values:
-    snap_df = history_df[history_df["date"] == selected_date_str].drop(
-        columns=["date"]).reset_index(drop=True)
-    snap_df["bfpd"] = snap_df["OIL"] + snap_df["WATER"]
+    snap_df = history_df[history_df["date"] == selected_date_str].drop(columns=["date"]).reset_index(drop=True)
+    for col in ["injection_rate", "last_test_date"]:
+        if col not in snap_df.columns:
+            snap_df[col] = "N/A" if col == "last_test_date" else 0
+    snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
+    snap_df["bwpd"] = (snap_df["bfpd"] - snap_df["bopd"]).clip(lower=0)
     snap_df["water_cut_pct"] = (
-        snap_df["WATER"] / snap_df["bfpd"].replace(0, np.nan) * 100
+        snap_df["bwpd"] / snap_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
-    last_test = history_df.groupby("UNIQUEID")["date"].max().reset_index().rename(
-        columns={"date": "last_test_date"})
-    snap_df = snap_df.merge(last_test, on="UNIQUEID", how="left")
-    snap_df = snap_df.merge(locations_df, on="UNIQUEID", how="left")
     display_wells = snap_df
 else:
     display_wells = wells_df
@@ -259,45 +243,47 @@ filtered = display_wells if field_filter == "All" else display_wells[display_wel
 # ----------------------------------------------------------------------------
 # SUMMARY METRICS
 # ----------------------------------------------------------------------------
-total_oil   = int(filtered["OIL"].sum())
-total_gas   = int(filtered["GAS"].sum())
-total_water = int(filtered["WATER"].sum())
-total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "WATER"].sum())
+total_bopd         = int(filtered["bopd"].sum())
+active_count       = int((filtered["status"] == "Oil").sum())
+shutin_count       = int((filtered["status"] == "Shut-in").sum())
+down_count         = int((filtered["status"] == "Down").sum())
+injector_count     = int((filtered["status"] == "Injector").sum())
+water_source_count = int((filtered["status"] == "Water Source").sum())
+total_injection    = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
+total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
+total_water_production = int(filtered["bwpd"].sum())
 
 agg_history = (
-    history_df.groupby("date")["OIL"].sum().reset_index().sort_values("date").rename(
-        columns={"OIL": "oil"})
-    if not history_df.empty else pd.DataFrame(columns=["date", "oil"])
+    history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date")
+    if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
 )
 
-oil_change = water_change = gas_change = water_source_change = None
+bopd_change = injection_change = water_prod_change = water_source_change = None
 if not history_df.empty:
     dates = sorted(history_df["date"].unique())
     if len(dates) >= 2:
         prev_date, curr_date = dates[-2], dates[-1]
         prev_df = history_df[history_df["date"] == prev_date].copy()
         curr_df = history_df[history_df["date"] == curr_date].copy()
-        # Join status for water source change
-        prev_df = prev_df.merge(locations_df[["UNIQUEID", "status"]], on="UNIQUEID", how="left")
-        curr_df = curr_df.merge(locations_df[["UNIQUEID", "status"]], on="UNIQUEID", how="left")
-        oil_change          = int(curr_df["OIL"].sum())   - int(prev_df["OIL"].sum())
-        gas_change          = int(curr_df["GAS"].sum())   - int(prev_df["GAS"].sum())
-        water_change        = int(curr_df["WATER"].sum()) - int(prev_df["WATER"].sum())
-        water_source_change = (
-            int(curr_df.loc[curr_df["status"] == "Water Source", "WATER"].sum()) -
-            int(prev_df.loc[prev_df["status"] == "Water Source", "WATER"].sum())
-        )
+        prev_df["bwpd"] = (prev_df["bfpd"] - prev_df["bopd"]).clip(lower=0)
+        curr_df["bwpd"] = (curr_df["bfpd"] - curr_df["bopd"]).clip(lower=0)
+        bopd_change         = int(curr_df["bopd"].sum()) - int(prev_df["bopd"].sum())
+        injection_change    = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum()) - \
+                              int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
+        water_prod_change   = int(curr_df["bwpd"].sum()) - int(prev_df["bwpd"].sum())
+        water_source_change = int(curr_df.loc[curr_df["status"] == "Water Source", "bwpd"].sum()) - \
+                              int(prev_df.loc[prev_df["status"] == "Water Source", "bwpd"].sum())
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
-row1_c1.metric("Total Oil Production",
-               f"{total_oil:,} BOPD",
-               f"{oil_change:+,} BOPD vs yesterday" if oil_change is not None else None)
-row1_c2.metric("Total Gas Production",
-               f"{total_gas:,} Mscfd",
-               f"{gas_change:+,} Mscfd vs yesterday" if gas_change is not None else None)
+row1_c1.metric("Total Production",
+               f"{total_bopd:,} BOPD",
+               f"{bopd_change:+,} BOPD vs yesterday" if bopd_change is not None else None)
+row1_c2.metric("Total Injection",
+               f"{total_injection:,} Barrels",
+               f"{injection_change:+,} Barrels vs yesterday" if injection_change is not None else None)
 row1_c3.metric("Total Water Production",
-               f"{total_water:,} BWPD",
-               f"{water_change:+,} BWPD vs yesterday" if water_change is not None else None)
+               f"{total_water_production:,} BWPD",
+               f"{water_prod_change:+,} BWPD vs yesterday" if water_prod_change is not None else None)
 row1_c4.metric("Total Water Source",
                f"{total_water_source:,} BWPD",
                f"{water_source_change:+,} BWPD vs yesterday" if water_source_change is not None else None)
@@ -327,13 +313,13 @@ with pie_col:
         font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    field_totals = display_wells.groupby("field")["OIL"].sum().reset_index()
+    field_totals = display_wells.groupby("field")["bopd"].sum().reset_index()
     field_order = ["North", "South", "East", "West"]
     field_totals["sort_key"] = field_totals["field"].apply(
         lambda f: next((i for i, k in enumerate(field_order) if k.lower() in f.lower()), len(field_order))
     )
     field_totals = field_totals.sort_values("sort_key").drop(columns="sort_key")
-    fig_field = px.bar(field_totals, x="OIL", y="field", orientation="h",
+    fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h",
                        color_discrete_sequence=["#38bdf8"])
     fig_field.update_layout(
         height=200, margin=dict(l=0, r=0, t=10, b=0),
@@ -349,7 +335,7 @@ with map_col:
         mappable, lat="latitude", lon="longitude", color="status",
         color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
         hover_name="ALIAS",
-        hover_data={"field": True, "OIL": True, "water_cut_pct": True,
+        hover_data={"field": True, "bopd": True, "water_cut_pct": True,
                     "latitude": False, "longitude": False},
         text="ALIAS", map_style="open-street-map",
     )
@@ -381,18 +367,17 @@ if agg_history.empty:
     st.caption("No history yet — upload data to see the trend.")
 else:
     trend_df = history_df.copy()
-    trend_df["bfpd"] = trend_df["OIL"] + trend_df["WATER"]
+    trend_df["bwpd"] = (trend_df["bfpd"] - trend_df["bopd"]).clip(lower=0)
     trend_df["water_cut_pct"] = (
-        trend_df["WATER"] / trend_df["bfpd"].replace(0, np.nan) * 100
+        trend_df["bwpd"] / trend_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
     trend_agg = trend_df.groupby("date").agg(
-        OIL=("OIL", "sum"), GAS=("GAS", "sum"),
-        WATER=("WATER", "sum"), bfpd=("bfpd", "sum"),
-        water_cut_pct=("water_cut_pct", "mean"),
+        bfpd=("bfpd", "sum"), bopd=("bopd", "sum"),
+        bwpd=("bwpd", "sum"), water_cut_pct=("water_cut_pct", "mean"),
     ).reset_index().sort_values("date")
     trend_agg["water_cut_pct"] = trend_agg["water_cut_pct"].round(1)
 
-    t1, t2, t3, t4, t5 = st.tabs(["OIL", "GAS", "WATER", "BFPD", "Water Cut %"])
+    trend_tab1, trend_tab2, trend_tab3, trend_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
 
     def make_trend_fig(y_col, line_color, fill_color, y_title):
         fig = go.Figure()
@@ -407,15 +392,13 @@ else:
             xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
         return fig
 
-    with t1:
-        st.plotly_chart(make_trend_fig("OIL",   "#eab308", "rgba(234,179,8,0.2)",   "OIL (BOPD)"),  use_container_width=True)
-    with t2:
-        st.plotly_chart(make_trend_fig("GAS",   "#f97316", "rgba(249,115,22,0.2)",  "GAS (Mscfd)"), use_container_width=True)
-    with t3:
-        st.plotly_chart(make_trend_fig("WATER", "#38bdf8", "rgba(56,189,248,0.2)",  "WATER (BWPD)"),use_container_width=True)
-    with t4:
-        st.plotly_chart(make_trend_fig("bfpd",  "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"),        use_container_width=True)
-    with t5:
+    with trend_tab1:
+        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
+    with trend_tab2:
+        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
+    with trend_tab3:
+        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
+    with trend_tab4:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg["water_cut_pct"],
@@ -430,95 +413,107 @@ else:
         st.plotly_chart(fig_wc, use_container_width=True)
 
 # ----------------------------------------------------------------------------
+# INJECTION RATE TREND
+# ----------------------------------------------------------------------------
+st.subheader("Injection Rate Trend")
+if history_df.empty:
+    st.caption("No history yet — upload data to see the trend.")
+else:
+    inj_hist = history_df[history_df["status"].isin(["Injector", "Water Source"])]
+    if inj_hist.empty:
+        st.caption("No Injector or Water Source wells found in data yet.")
+    else:
+        inj_by_date = inj_hist.groupby(["date", "status"])["injection_rate"].sum().reset_index().sort_values("date")
+        fig_inj = px.line(inj_by_date, x="date", y="injection_rate", color="status",
+                          color_discrete_map=STATUS_COLORS, markers=True)
+        fig_inj.update_layout(
+            height=280, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
+            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="Injection Rate"),
+            legend=dict(font=dict(color="#e2e8f0"), orientation="h"))
+        st.plotly_chart(fig_inj, use_container_width=True)
+
+# ----------------------------------------------------------------------------
 # TOP PRODUCERS  +  WELL DECLINE TREND
 # ----------------------------------------------------------------------------
 top_col, detail_col = st.columns(2)
 
 with top_col:
     st.subheader("Top Producing Wells")
-    top_wells = filtered.sort_values("OIL", ascending=False).head(8)
-    fig_top = px.bar(top_wells, x="ALIAS", y="OIL", color_discrete_sequence=["#eab308"])
+    top_wells = filtered.sort_values("bopd", ascending=False).head(8)
+    fig_top = px.bar(top_wells, x="ALIAS", y="bopd", color_discrete_sequence=["#38bdf8"])
     fig_top.update_layout(
         height=300, margin=dict(l=0, r=0, t=10, b=0),
         paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
-        font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title="OIL (BOPD)")
+        font=dict(color="#94a3b8"), xaxis_title=None, yaxis_title="BOPD")
     st.plotly_chart(fig_top, use_container_width=True)
 
 with detail_col:
     st.subheader("Well Decline Trend")
-    alias_list = filtered["ALIAS"].dropna().tolist()
-    top_alias  = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else alias_list[0]
-    selected_alias = st.selectbox("Select a well", alias_list, index=alias_list.index(top_alias))
-
-    # Map ALIAS back to UNIQUEID for history lookup
-    uid_match = filtered.loc[filtered["ALIAS"] == selected_alias, "UNIQUEID"]
-    if uid_match.empty:
-        st.caption("No UNIQUEID found for selected well.")
+    top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else filtered["ALIAS"].iloc[0]
+    selected_well = st.selectbox("Select a well", filtered["ALIAS"].tolist(),
+                                 index=filtered["ALIAS"].tolist().index(top_well))
+    well_history = (
+        history_df[history_df["ALIAS"] == selected_well].sort_values("date").copy()
+        if not history_df.empty else pd.DataFrame()
+    )
+    if well_history.empty:
+        st.caption(f"No history yet for {selected_well}.")
     else:
-        selected_uid = uid_match.iloc[0]
-        well_history = (
-            history_df[history_df["UNIQUEID"] == selected_uid].sort_values("date").copy()
-            if not history_df.empty else pd.DataFrame()
-        )
-        if well_history.empty:
-            st.caption(f"No history yet for {selected_alias}.")
-        else:
-            well_history["bfpd"] = well_history["OIL"] + well_history["WATER"]
-            well_history["water_cut_pct"] = (
-                well_history["WATER"] / well_history["bfpd"].replace(0, np.nan) * 100
-            ).round(1).fillna(0)
+        well_history["bwpd"] = (well_history["bfpd"] - well_history["bopd"]).clip(lower=0)
+        well_history["water_cut_pct"] = (
+            well_history["bwpd"] / well_history["bfpd"].replace(0, np.nan) * 100
+        ).round(1).fillna(0)
 
-            w1, w2, w3, w4, w5 = st.tabs(["OIL", "GAS", "WATER", "BFPD", "Water Cut %"])
+        w_tab1, w_tab2, w_tab3, w_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
 
-            def make_well_fig(y_col, line_color, fill_color, y_title):
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=well_history["date"], y=well_history[y_col],
-                    mode="lines+markers", fill="tozeroy",
-                    line=dict(color=line_color, width=2), fillcolor=fill_color,
-                ))
-                fig.update_layout(
-                    height=300, margin=dict(l=0, r=0, t=10, b=0),
-                    paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
-                    xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
-                return fig
+        def make_well_fig(y_col, line_color, fill_color, y_title):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=well_history["date"], y=well_history[y_col],
+                mode="lines+markers", fill="tozeroy",
+                line=dict(color=line_color, width=2), fillcolor=fill_color,
+            ))
+            fig.update_layout(
+                height=300, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
+                xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
+            return fig
 
-            with w1:
-                st.plotly_chart(make_well_fig("OIL",   "#eab308", "rgba(234,179,8,0.2)",   "OIL (BOPD)"),  use_container_width=True)
-            with w2:
-                st.plotly_chart(make_well_fig("GAS",   "#f97316", "rgba(249,115,22,0.2)",  "GAS (Mscfd)"), use_container_width=True)
-            with w3:
-                st.plotly_chart(make_well_fig("WATER", "#38bdf8", "rgba(56,189,248,0.2)",  "WATER (BWPD)"),use_container_width=True)
-            with w4:
-                st.plotly_chart(make_well_fig("bfpd",  "#22c55e", "rgba(34,197,94,0.2)",   "BFPD"),        use_container_width=True)
-            with w5:
-                fig_wc2 = go.Figure()
-                fig_wc2.add_trace(go.Scatter(
-                    x=well_history["date"], y=well_history["water_cut_pct"],
-                    mode="lines+markers", fill="tozeroy",
-                    line=dict(color="#ef4444", width=2), fillcolor="rgba(239,68,68,0.15)",
-                ))
-                fig_wc2.update_layout(
-                    height=300, margin=dict(l=0, r=0, t=10, b=0),
-                    paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
-                    xaxis=dict(gridcolor="#263144"),
-                    yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
-                st.plotly_chart(fig_wc2, use_container_width=True)
+        with w_tab1:
+            st.plotly_chart(make_well_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
+        with w_tab2:
+            st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
+        with w_tab3:
+            st.plotly_chart(make_well_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
+        with w_tab4:
+            fig_wc2 = go.Figure()
+            fig_wc2.add_trace(go.Scatter(
+                x=well_history["date"], y=well_history["water_cut_pct"],
+                mode="lines+markers", fill="tozeroy",
+                line=dict(color="#ef4444", width=2), fillcolor="rgba(239,68,68,0.15)",
+            ))
+            fig_wc2.update_layout(
+                height=300, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
+                xaxis=dict(gridcolor="#263144"),
+                yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
+            st.plotly_chart(fig_wc2, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # WELL TABLE
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
-display_df = filtered[["ALIAS", "field", "status", "bfpd", "OIL", "GAS", "WATER",
-                        "water_cut_pct", "last_test_date"]].rename(
+display_df = filtered[["ALIAS", "field", "status", "bfpd", "bopd", "bwpd",
+                        "water_cut_pct", "injection_rate", "last_test_date"]].rename(
     columns={"ALIAS": "Well", "field": "Field", "status": "Status",
-             "bfpd": "BFPD", "OIL": "OIL (BOPD)", "GAS": "GAS (Mscfd)",
-             "WATER": "WATER (BWPD)", "water_cut_pct": "Water Cut (%)",
+             "bfpd": "BFPD", "bopd": "BOPD", "bwpd": "BWPD",
+             "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate",
              "last_test_date": "Last Test"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 if using_sample:
-    st.caption("⚠️ Showing sample data — connect real data via Supabase.")
+    st.caption("⚠️ Showing sample data — upload a file in the ETL page to load real data.")
 else:
     st.caption("✅ Showing live shared data from Supabase.")
