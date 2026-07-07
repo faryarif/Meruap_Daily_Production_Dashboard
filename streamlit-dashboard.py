@@ -251,7 +251,7 @@ if selected_date_str and selected_date_str != wells_df.get("last_test_date", pd.
     try:
         snap_resp = get_supabase().table("ProdWellBasiss").select(
             "Date, UNIQUEID, OIL, GAS, WATER"
-        ).eq("Date", selected_date_str).execute()
+        ).eq("Date", selected_date_str).limit(10000).execute()
         if snap_resp.data:
             snap_df = pd.DataFrame(snap_resp.data)
             for col in ["OIL", "GAS", "WATER"]:
@@ -455,7 +455,7 @@ with detail_col:
         def fetch_well_history(uid):
             resp = get_supabase().table("ProdWellBasiss").select(
                 "Date, OIL, GAS, WATER"
-            ).eq("UNIQUEID", uid).order("Date").execute()
+            ).eq("UNIQUEID", uid).order("Date").limit(50000).execute()
             if not resp.data:
                 return pd.DataFrame()
             df = pd.DataFrame(resp.data)
