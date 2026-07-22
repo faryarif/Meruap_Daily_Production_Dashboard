@@ -11,7 +11,7 @@ Neon tables needed:
 
 Streamlit secrets (.streamlit/secrets.toml):
     [neon]
-    url = "postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require"
+    url = "postgresql://neondb_owner:npg_vs0yrRMP6pte@ep-dawn-frost-aoz1ruri-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 """
 
 import streamlit as st
