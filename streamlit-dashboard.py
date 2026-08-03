@@ -26,7 +26,7 @@ from supabase import create_client
 # PAGE CONFIG
 # ----------------------------------------------------------------------------
 st.set_page_config(page_title="Meruap Dashboard", page_icon="🛢️", layout="wide",
-                   initial_sidebar_state="expanded")
+                   initial_sidebar_state="collapsed")
 
 STATUS_COLORS = {
     "Oil": "#22c55e",
@@ -40,9 +40,6 @@ STATUS_COLORS = {
 
 DATA_PROD_COLS     = ["date", "ALIAS", "OIL", "WATER", "injection_rate"]
 LOCATION_HEAD_COLS = ["ALIAS", "field", "status", "latitude", "longitude"]
-
-if "selected_well" not in st.session_state:
-    st.session_state.selected_well = None
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -71,14 +68,6 @@ def get_supabase():
         st.secrets["supabase"]["url"].rstrip("/"),
         st.secrets["supabase"]["key"],
     )
-
-# FIX 1: use correct table name in test_connection
-def test_connection():
-    try:
-        get_supabase().table("ProdWellBasiss").select("ALIAS").limit(1).execute()
-        return True, "Connected"
-    except Exception as e:
-        return False, str(e)
 
 # ----------------------------------------------------------------------------
 # READ FUNCTIONS
@@ -113,7 +102,7 @@ def read_locations():
     return df
 
 # ----------------------------------------------------------------------------
-# FIX 2: sample data generators (previously missing, caused NameError)
+# SAMPLE DATA GENERATORS
 # ----------------------------------------------------------------------------
 @st.cache_data
 def generate_sample_data():
@@ -159,16 +148,6 @@ def generate_sample_locations():
     return pd.DataFrame(rows)
 
 # ----------------------------------------------------------------------------
-# FIX 3: call test_connection in sidebar so it's actually used
-# ----------------------------------------------------------------------------
-with st.sidebar:
-    ok, msg = test_connection()
-    if ok:
-        st.success("✅ Supabase connected")
-    else:
-        st.error(f"❌ {msg}")
-
-# ----------------------------------------------------------------------------
 # LOAD DATA
 # ----------------------------------------------------------------------------
 try:
@@ -187,7 +166,7 @@ if using_sample:
     wells_df, history_df = generate_sample_data()
     locations_df = generate_sample_locations()
     if db_connected:
-        st.info("No data yet — showing sample data. Upload a file in the sidebar.")
+        st.info("No data yet — showing sample data. Connect Supabase to load real data.")
 
 if "injection_rate" not in wells_df.columns:
     wells_df["injection_rate"] = 0
@@ -339,15 +318,13 @@ with pie_col:
 with map_col:
     st.subheader("Well Map")
     mappable = filtered.dropna(subset=["latitude", "longitude"])
-    marker_sizes = [22 if a == st.session_state.selected_well else 13 for a in mappable["ALIAS"]]
     fig_map = px.scatter_map(
         mappable, lat="latitude", lon="longitude", color="status",
-        color_discrete_map=STATUS_COLORS, size=marker_sizes, size_max=18,
+        color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
         hover_name="ALIAS",
         hover_data={"field": True, "OIL": True, "water_cut_pct": True,
                     "latitude": False, "longitude": False},
         text="ALIAS", map_style="open-street-map",
-        custom_data=["ALIAS"],
     )
     fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=11))
     fig_map.update_layout(
@@ -367,31 +344,7 @@ with map_col:
             west=mappable["longitude"].min() - 0.01, east=mappable["longitude"].max() + 0.01,
             south=mappable["latitude"].min() - 0.01, north=mappable["latitude"].max() + 0.01,
         ))
-    map_event = st.plotly_chart(
-        fig_map, use_container_width=True,
-        on_select="rerun", selection_mode="points", key="well_map_chart",
-    )
-    clicked_points = (map_event or {}).get("selection", {}).get("points", []) if map_event else []
-    if clicked_points:
-        clicked_alias = clicked_points[0].get("customdata", [None])[0]
-        if clicked_alias and clicked_alias != st.session_state.selected_well:
-            st.session_state.selected_well = clicked_alias
-            st.rerun()
-
-    if st.session_state.selected_well and st.session_state.selected_well in filtered["ALIAS"].values:
-        sel = filtered[filtered["ALIAS"] == st.session_state.selected_well].iloc[0]
-        status_color = STATUS_COLORS.get(sel["status"], "#94a3b8")
-        st.markdown(
-            f"""<div style="margin-top:10px;padding:10px;background:#141d2e;
-            border:1px solid #263144;border-radius:8px;font-size:13px;">
-            <strong>{sel['ALIAS']}</strong> · {sel['field']} ·
-            <span style="color:{status_color};font-weight:600;">{sel['status']}</span> ·
-            {int(sel['OIL']):,} BOPD · Water cut {sel['water_cut_pct']}%
-            </div>""",
-            unsafe_allow_html=True,
-        )
-    else:
-        st.caption("Click any well marker on the map to see its details and decline trend below.")
+    st.plotly_chart(fig_map, use_container_width=True)
 
 # ----------------------------------------------------------------------------
 # PRODUCTION TREND
@@ -489,11 +442,8 @@ with detail_col:
         selected_well = None
     else:
         top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
-        default_well = st.session_state.selected_well if st.session_state.selected_well in well_options else top_well
         selected_well = st.selectbox("Select a well", well_options,
-                                     index=well_options.index(default_well),
-                                     key="well_selectbox")
-        st.session_state.selected_well = selected_well
+                                     index=well_options.index(top_well))
     well_history = (
         history_df[history_df["ALIAS"] == selected_well].sort_values("date").copy()
         if selected_well and not history_df.empty else pd.DataFrame()
