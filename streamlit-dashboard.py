@@ -5,7 +5,7 @@ Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - ProdWellBasis : id, date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date
+    - ProdWellBasis : id, date, ALIAS, status, bfpd, bopd, injection_rate
     - HeaderID      : ALIAS, field, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
@@ -38,7 +38,7 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_PROD_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate", "last_test_date"]
+DATA_PROD_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate"]
 LOCATION_HEAD_COLS = ["ALIAS", "field", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
@@ -84,7 +84,7 @@ def test_connection():
 def read_data():
     client = get_supabase()
     resp = client.table("ProdWellBasis").select(
-        "date, ALIAS, status, bfpd, bopd, injection_rate, last_test_date"
+        "date, ALIAS, status, bfpd, bopd, injection_rate"
     ).order("date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_PROD_COLS)
@@ -128,7 +128,6 @@ def generate_sample_data():
             "ALIAS": name, "status": status,
             "bfpd": bfpd_val, "bopd": bopd_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
-            "last_test_date": "2026-06-23",
         })
     current_df = pd.DataFrame(base_rows)
     history_rows = []
@@ -181,9 +180,8 @@ if using_sample:
     if db_connected:
         st.info("No data yet — showing sample data. Upload a file in the sidebar.")
 
-for col in ["injection_rate", "last_test_date"]:
-    if col not in wells_df.columns:
-        wells_df[col] = "N/A" if col == "last_test_date" else 0
+if "injection_rate" not in wells_df.columns:
+    wells_df["injection_rate"] = 0
 
 wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
 wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
@@ -226,9 +224,8 @@ with col_filter:
 # Filter by selected snapshot date
 if selected_date_str and not history_df.empty and selected_date_str in history_df["date"].values:
     snap_df = history_df[history_df["date"] == selected_date_str].drop(columns=["date"]).reset_index(drop=True)
-    for col in ["injection_rate", "last_test_date"]:
-        if col not in snap_df.columns:
-            snap_df[col] = "N/A" if col == "last_test_date" else 0
+    if "injection_rate" not in snap_df.columns:
+        snap_df["injection_rate"] = 0
     snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
     snap_df["bwpd"] = (snap_df["bfpd"] - snap_df["bopd"]).clip(lower=0)
     snap_df["water_cut_pct"] = (
@@ -505,11 +502,10 @@ with detail_col:
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
 display_df = filtered[["ALIAS", "field", "status", "bfpd", "bopd", "bwpd",
-                        "water_cut_pct", "injection_rate", "last_test_date"]].rename(
+                        "water_cut_pct", "injection_rate"]].rename(
     columns={"ALIAS": "Well", "field": "Field", "status": "Status",
              "bfpd": "BFPD", "bopd": "BOPD", "bwpd": "BWPD",
-             "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate",
-             "last_test_date": "Last Test"}
+             "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
