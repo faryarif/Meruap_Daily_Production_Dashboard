@@ -5,8 +5,8 @@ Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - ProdWellBasis : id, date, ALIAS, status, bfpd, bopd, injection_rate
-    - HeaderID      : ALIAS, field, latitude, longitude
+    - ProdWellBasis : id, date, ALIAS, bfpd, bopd, injection_rate
+    - HeaderID      : ALIAS, field, status, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
     [supabase]
@@ -38,8 +38,8 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_PROD_COLS     = ["date", "ALIAS", "status", "bfpd", "bopd", "injection_rate"]
-LOCATION_HEAD_COLS = ["ALIAS", "field", "latitude", "longitude"]
+DATA_PROD_COLS     = ["date", "ALIAS", "bfpd", "bopd", "injection_rate"]
+LOCATION_HEAD_COLS = ["ALIAS", "field", "status", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
 # STYLING
@@ -84,7 +84,7 @@ def test_connection():
 def read_data():
     client = get_supabase()
     resp = client.table("ProdWellBasis").select(
-        "date, ALIAS, status, bfpd, bopd, injection_rate"
+        "date, ALIAS, bfpd, bopd, injection_rate"
     ).order("date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_PROD_COLS)
@@ -100,7 +100,7 @@ def read_data():
 def read_locations():
     client = get_supabase()
     resp = client.table("HeaderID").select(
-        "ALIAS, field, latitude, longitude"
+        "ALIAS, field, status, latitude, longitude"
     ).execute()
     if not resp.data:
         return pd.DataFrame(columns=LOCATION_HEAD_COLS)
@@ -125,7 +125,7 @@ def generate_sample_data():
         bopd_val = int(base_rate) if status == "Oil" else 0
         bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
         base_rows.append({
-            "ALIAS": name, "status": status,
+            "ALIAS": name,
             "bfpd": bfpd_val, "bopd": bopd_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
         })
@@ -143,11 +143,17 @@ def generate_sample_locations():
     names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
              "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
     fields = ["North Block", "South Block", "East Flank"]
-    return pd.DataFrame([{
-        "ALIAS": name, "field": fields[i % 3],
-        "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
-        "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
-    } for i, name in enumerate(names)])
+    rows = []
+    for i, name in enumerate(names):
+        rng.integers(80, 500)  # discarded — keeps draw sequence aligned with generate_sample_data
+        roll = rng.random()
+        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
+        rows.append({
+            "ALIAS": name, "field": fields[i % 3], "status": status,
+            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
+            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
+        })
+    return pd.DataFrame(rows)
 
 # ----------------------------------------------------------------------------
 # FIX 3: call test_connection in sidebar so it's actually used
@@ -182,6 +188,10 @@ if using_sample:
 
 if "injection_rate" not in wells_df.columns:
     wells_df["injection_rate"] = 0
+
+if not history_df.empty:
+    history_df = history_df.merge(locations_df[["ALIAS", "status"]], on="ALIAS", how="left")
+    history_df["status"] = history_df["status"].fillna("Unknown")
 
 wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
 wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
@@ -223,7 +233,7 @@ with col_filter:
 
 # Filter by selected snapshot date
 if selected_date_str and not history_df.empty and selected_date_str in history_df["date"].values:
-    snap_df = history_df[history_df["date"] == selected_date_str].drop(columns=["date"]).reset_index(drop=True)
+    snap_df = history_df[history_df["date"] == selected_date_str].drop(columns=["date", "status"]).reset_index(drop=True)
     if "injection_rate" not in snap_df.columns:
         snap_df["injection_rate"] = 0
     snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
