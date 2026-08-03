@@ -41,6 +41,9 @@ STATUS_COLORS = {
 DATA_PROD_COLS     = ["date", "ALIAS", "OIL", "WATER", "injection_rate"]
 LOCATION_HEAD_COLS = ["ALIAS", "field", "status", "latitude", "longitude"]
 
+if "selected_well" not in st.session_state:
+    st.session_state.selected_well = None
+
 # ----------------------------------------------------------------------------
 # STYLING
 # ----------------------------------------------------------------------------
@@ -336,13 +339,15 @@ with pie_col:
 with map_col:
     st.subheader("Well Map")
     mappable = filtered.dropna(subset=["latitude", "longitude"])
+    marker_sizes = [22 if a == st.session_state.selected_well else 13 for a in mappable["ALIAS"]]
     fig_map = px.scatter_map(
         mappable, lat="latitude", lon="longitude", color="status",
-        color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
+        color_discrete_map=STATUS_COLORS, size=marker_sizes, size_max=18,
         hover_name="ALIAS",
         hover_data={"field": True, "OIL": True, "water_cut_pct": True,
                     "latitude": False, "longitude": False},
         text="ALIAS", map_style="open-street-map",
+        custom_data=["ALIAS"],
     )
     fig_map.update_traces(textposition="top center", textfont=dict(color="white", size=11))
     fig_map.update_layout(
@@ -362,7 +367,31 @@ with map_col:
             west=mappable["longitude"].min() - 0.01, east=mappable["longitude"].max() + 0.01,
             south=mappable["latitude"].min() - 0.01, north=mappable["latitude"].max() + 0.01,
         ))
-    st.plotly_chart(fig_map, use_container_width=True)
+    map_event = st.plotly_chart(
+        fig_map, use_container_width=True,
+        on_select="rerun", selection_mode="points", key="well_map_chart",
+    )
+    clicked_points = (map_event or {}).get("selection", {}).get("points", []) if map_event else []
+    if clicked_points:
+        clicked_alias = clicked_points[0].get("customdata", [None])[0]
+        if clicked_alias and clicked_alias != st.session_state.selected_well:
+            st.session_state.selected_well = clicked_alias
+            st.rerun()
+
+    if st.session_state.selected_well and st.session_state.selected_well in filtered["ALIAS"].values:
+        sel = filtered[filtered["ALIAS"] == st.session_state.selected_well].iloc[0]
+        status_color = STATUS_COLORS.get(sel["status"], "#94a3b8")
+        st.markdown(
+            f"""<div style="margin-top:10px;padding:10px;background:#141d2e;
+            border:1px solid #263144;border-radius:8px;font-size:13px;">
+            <strong>{sel['ALIAS']}</strong> · {sel['field']} ·
+            <span style="color:{status_color};font-weight:600;">{sel['status']}</span> ·
+            {int(sel['OIL']):,} BOPD · Water cut {sel['water_cut_pct']}%
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption("Click any well marker on the map to see its details and decline trend below.")
 
 # ----------------------------------------------------------------------------
 # PRODUCTION TREND
@@ -454,15 +483,24 @@ with top_col:
 
 with detail_col:
     st.subheader("Well Decline Trend")
-    top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else filtered["ALIAS"].iloc[0]
-    selected_well = st.selectbox("Select a well", filtered["ALIAS"].tolist(),
-                                 index=filtered["ALIAS"].tolist().index(top_well))
+    well_options = filtered["ALIAS"].tolist()
+    if not well_options:
+        st.caption("No wells to display for this filter.")
+        selected_well = None
+    else:
+        top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
+        default_well = st.session_state.selected_well if st.session_state.selected_well in well_options else top_well
+        selected_well = st.selectbox("Select a well", well_options,
+                                     index=well_options.index(default_well),
+                                     key="well_selectbox")
+        st.session_state.selected_well = selected_well
     well_history = (
         history_df[history_df["ALIAS"] == selected_well].sort_values("date").copy()
-        if not history_df.empty else pd.DataFrame()
+        if selected_well and not history_df.empty else pd.DataFrame()
     )
     if well_history.empty:
-        st.caption(f"No history yet for {selected_well}.")
+        if selected_well:
+            st.caption(f"No history yet for {selected_well}.")
     else:
         well_history["water_cut_pct"] = (
             well_history["WATER"] / well_history["bfpd"].replace(0, np.nan) * 100
