@@ -5,7 +5,7 @@ Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - ProdWellBasis : id, date, ALIAS, bfpd, bopd, injection_rate
+    - ProdWellBasiss : id, date, ALIAS, bfpd, OIL, injection_rate
     - HeaderID      : ALIAS, field, status, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
@@ -38,7 +38,7 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_PROD_COLS     = ["date", "ALIAS", "bfpd", "bopd", "injection_rate"]
+DATA_PROD_COLS     = ["date", "ALIAS", "bfpd", "OIL", "injection_rate"]
 LOCATION_HEAD_COLS = ["ALIAS", "field", "status", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
@@ -72,7 +72,7 @@ def get_supabase():
 # FIX 1: use correct table name in test_connection
 def test_connection():
     try:
-        get_supabase().table("ProdWellBasis").select("ALIAS").limit(1).execute()
+        get_supabase().table("ProdWellBasiss").select("ALIAS").limit(1).execute()
         return True, "Connected"
     except Exception as e:
         return False, str(e)
@@ -83,13 +83,13 @@ def test_connection():
 @st.cache_data(ttl=30, show_spinner=False)
 def read_data():
     client = get_supabase()
-    resp = client.table("ProdWellBasis").select(
-        "date, ALIAS, bfpd, bopd, injection_rate"
+    resp = client.table("ProdWellBasiss").select(
+        "date, ALIAS, bfpd, OIL, injection_rate"
     ).order("date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_PROD_COLS)
     df = pd.DataFrame(resp.data)
-    for col in ["bopd", "bfpd", "injection_rate"]:
+    for col in ["OIL", "bfpd", "injection_rate"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     latest_date = df["date"].max()
@@ -126,7 +126,7 @@ def generate_sample_data():
         bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
         base_rows.append({
             "ALIAS": name,
-            "bfpd": bfpd_val, "bopd": bopd_val,
+            "bfpd": bfpd_val, "OIL": bopd_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
         })
     current_df = pd.DataFrame(base_rows)
@@ -194,9 +194,9 @@ if not history_df.empty:
     history_df["status"] = history_df["status"].fillna("Unknown")
 
 wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
-wells_df["bwpd"] = (wells_df["bfpd"] - wells_df["bopd"]).clip(lower=0)
+wells_df["WATER"] = (wells_df["bfpd"] - wells_df["OIL"]).clip(lower=0)
 wells_df["water_cut_pct"] = (
-    wells_df["bwpd"] / wells_df["bfpd"].replace(0, np.nan) * 100
+    wells_df["WATER"] / wells_df["bfpd"].replace(0, np.nan) * 100
 ).round(1).fillna(0)
 
 missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
@@ -237,9 +237,9 @@ if selected_date_str and not history_df.empty and selected_date_str in history_d
     if "injection_rate" not in snap_df.columns:
         snap_df["injection_rate"] = 0
     snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
-    snap_df["bwpd"] = (snap_df["bfpd"] - snap_df["bopd"]).clip(lower=0)
+    snap_df["WATER"] = (snap_df["bfpd"] - snap_df["OIL"]).clip(lower=0)
     snap_df["water_cut_pct"] = (
-        snap_df["bwpd"] / snap_df["bfpd"].replace(0, np.nan) * 100
+        snap_df["WATER"] / snap_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
     display_wells = snap_df
 else:
@@ -250,19 +250,19 @@ filtered = display_wells if field_filter == "All" else display_wells[display_wel
 # ----------------------------------------------------------------------------
 # SUMMARY METRICS
 # ----------------------------------------------------------------------------
-total_bopd         = int(filtered["bopd"].sum())
+total_bopd         = int(filtered["OIL"].sum())
 active_count       = int((filtered["status"] == "Oil").sum())
 shutin_count       = int((filtered["status"] == "Shut-in").sum())
 down_count         = int((filtered["status"] == "Down").sum())
 injector_count     = int((filtered["status"] == "Injector").sum())
 water_source_count = int((filtered["status"] == "Water Source").sum())
 total_injection    = int(filtered.loc[filtered["status"] == "Injector", "injection_rate"].sum())
-total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "bwpd"].sum())
-total_water_production = int(filtered["bwpd"].sum())
+total_water_source = int(filtered.loc[filtered["status"] == "Water Source", "WATER"].sum())
+total_water_production = int(filtered["WATER"].sum())
 
 agg_history = (
-    history_df.groupby("date")["bopd"].sum().reset_index().sort_values("date")
-    if not history_df.empty else pd.DataFrame(columns=["date", "bopd"])
+    history_df.groupby("date")["OIL"].sum().reset_index().sort_values("date")
+    if not history_df.empty else pd.DataFrame(columns=["date", "OIL"])
 )
 
 bopd_change = injection_change = water_prod_change = water_source_change = None
@@ -272,14 +272,14 @@ if not history_df.empty:
         prev_date, curr_date = dates[-2], dates[-1]
         prev_df = history_df[history_df["date"] == prev_date].copy()
         curr_df = history_df[history_df["date"] == curr_date].copy()
-        prev_df["bwpd"] = (prev_df["bfpd"] - prev_df["bopd"]).clip(lower=0)
-        curr_df["bwpd"] = (curr_df["bfpd"] - curr_df["bopd"]).clip(lower=0)
-        bopd_change         = int(curr_df["bopd"].sum()) - int(prev_df["bopd"].sum())
+        prev_df["WATER"] = (prev_df["bfpd"] - prev_df["OIL"]).clip(lower=0)
+        curr_df["WATER"] = (curr_df["bfpd"] - curr_df["OIL"]).clip(lower=0)
+        bopd_change         = int(curr_df["OIL"].sum()) - int(prev_df["OIL"].sum())
         injection_change    = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum()) - \
                               int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
-        water_prod_change   = int(curr_df["bwpd"].sum()) - int(prev_df["bwpd"].sum())
-        water_source_change = int(curr_df.loc[curr_df["status"] == "Water Source", "bwpd"].sum()) - \
-                              int(prev_df.loc[prev_df["status"] == "Water Source", "bwpd"].sum())
+        water_prod_change   = int(curr_df["WATER"].sum()) - int(prev_df["WATER"].sum())
+        water_source_change = int(curr_df.loc[curr_df["status"] == "Water Source", "WATER"].sum()) - \
+                              int(prev_df.loc[prev_df["status"] == "Water Source", "WATER"].sum())
 
 row1_c1, row1_c2, row1_c3, row1_c4 = st.columns(4)
 row1_c1.metric("Total Production",
@@ -320,13 +320,13 @@ with pie_col:
         font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    field_totals = display_wells.groupby("field")["bopd"].sum().reset_index()
+    field_totals = display_wells.groupby("field")["OIL"].sum().reset_index()
     field_order = ["North", "South", "East", "West"]
     field_totals["sort_key"] = field_totals["field"].apply(
         lambda f: next((i for i, k in enumerate(field_order) if k.lower() in f.lower()), len(field_order))
     )
     field_totals = field_totals.sort_values("sort_key").drop(columns="sort_key")
-    fig_field = px.bar(field_totals, x="bopd", y="field", orientation="h",
+    fig_field = px.bar(field_totals, x="OIL", y="field", orientation="h",
                        color_discrete_sequence=["#38bdf8"])
     fig_field.update_layout(
         height=200, margin=dict(l=0, r=0, t=10, b=0),
@@ -342,7 +342,7 @@ with map_col:
         mappable, lat="latitude", lon="longitude", color="status",
         color_discrete_map=STATUS_COLORS, size=[18] * len(mappable), size_max=14,
         hover_name="ALIAS",
-        hover_data={"field": True, "bopd": True, "water_cut_pct": True,
+        hover_data={"field": True, "OIL": True, "water_cut_pct": True,
                     "latitude": False, "longitude": False},
         text="ALIAS", map_style="open-street-map",
     )
@@ -374,13 +374,13 @@ if agg_history.empty:
     st.caption("No history yet — upload data to see the trend.")
 else:
     trend_df = history_df.copy()
-    trend_df["bwpd"] = (trend_df["bfpd"] - trend_df["bopd"]).clip(lower=0)
+    trend_df["WATER"] = (trend_df["bfpd"] - trend_df["OIL"]).clip(lower=0)
     trend_df["water_cut_pct"] = (
-        trend_df["bwpd"] / trend_df["bfpd"].replace(0, np.nan) * 100
+        trend_df["WATER"] / trend_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
     trend_agg = trend_df.groupby("date").agg(
-        bfpd=("bfpd", "sum"), bopd=("bopd", "sum"),
-        bwpd=("bwpd", "sum"), water_cut_pct=("water_cut_pct", "mean"),
+        bfpd=("bfpd", "sum"), OIL=("OIL", "sum"),
+        WATER=("WATER", "sum"), water_cut_pct=("water_cut_pct", "mean"),
     ).reset_index().sort_values("date")
     trend_agg["water_cut_pct"] = trend_agg["water_cut_pct"].round(1)
 
@@ -400,11 +400,11 @@ else:
         return fig
 
     with trend_tab1:
-        st.plotly_chart(make_trend_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("OIL", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
     with trend_tab2:
         st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
     with trend_tab3:
-        st.plotly_chart(make_trend_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
     with trend_tab4:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
@@ -447,8 +447,8 @@ top_col, detail_col = st.columns(2)
 
 with top_col:
     st.subheader("Top Producing Wells")
-    top_wells = filtered.sort_values("bopd", ascending=False).head(8)
-    fig_top = px.bar(top_wells, x="ALIAS", y="bopd", color_discrete_sequence=["#38bdf8"])
+    top_wells = filtered.sort_values("OIL", ascending=False).head(8)
+    fig_top = px.bar(top_wells, x="ALIAS", y="OIL", color_discrete_sequence=["#38bdf8"])
     fig_top.update_layout(
         height=300, margin=dict(l=0, r=0, t=10, b=0),
         paper_bgcolor="#0b1220", plot_bgcolor="#0b1220",
@@ -457,7 +457,7 @@ with top_col:
 
 with detail_col:
     st.subheader("Well Decline Trend")
-    top_well = filtered.sort_values("bopd", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else filtered["ALIAS"].iloc[0]
+    top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"] if not filtered.empty else filtered["ALIAS"].iloc[0]
     selected_well = st.selectbox("Select a well", filtered["ALIAS"].tolist(),
                                  index=filtered["ALIAS"].tolist().index(top_well))
     well_history = (
@@ -467,9 +467,9 @@ with detail_col:
     if well_history.empty:
         st.caption(f"No history yet for {selected_well}.")
     else:
-        well_history["bwpd"] = (well_history["bfpd"] - well_history["bopd"]).clip(lower=0)
+        well_history["WATER"] = (well_history["bfpd"] - well_history["OIL"]).clip(lower=0)
         well_history["water_cut_pct"] = (
-            well_history["bwpd"] / well_history["bfpd"].replace(0, np.nan) * 100
+            well_history["WATER"] / well_history["bfpd"].replace(0, np.nan) * 100
         ).round(1).fillna(0)
 
         w_tab1, w_tab2, w_tab3, w_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
@@ -488,11 +488,11 @@ with detail_col:
             return fig
 
         with w_tab1:
-            st.plotly_chart(make_well_fig("bopd", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("OIL", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
         with w_tab2:
             st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
         with w_tab3:
-            st.plotly_chart(make_well_fig("bwpd", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
         with w_tab4:
             fig_wc2 = go.Figure()
             fig_wc2.add_trace(go.Scatter(
@@ -511,10 +511,10 @@ with detail_col:
 # WELL TABLE
 # ----------------------------------------------------------------------------
 st.subheader("Well List")
-display_df = filtered[["ALIAS", "field", "status", "bfpd", "bopd", "bwpd",
+display_df = filtered[["ALIAS", "field", "status", "bfpd", "OIL", "WATER",
                         "water_cut_pct", "injection_rate"]].rename(
     columns={"ALIAS": "Well", "field": "Field", "status": "Status",
-             "bfpd": "BFPD", "bopd": "BOPD", "bwpd": "BWPD",
+             "bfpd": "BFPD", "OIL": "BOPD", "WATER": "BWPD",
              "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
