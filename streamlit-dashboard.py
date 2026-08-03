@@ -102,52 +102,6 @@ def read_locations():
     return df
 
 # ----------------------------------------------------------------------------
-# SAMPLE DATA GENERATORS
-# ----------------------------------------------------------------------------
-@st.cache_data
-def generate_sample_data():
-    rng = np.random.default_rng(42)
-    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    base_rows = []
-    for name in names:
-        base_rate = rng.integers(80, 500)
-        roll = rng.random()
-        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
-        bopd_val = int(base_rate) if status == "Oil" else 0
-        water_val = int(bopd_val * 0.3) if status == "Oil" else 0
-        base_rows.append({
-            "ALIAS": name,
-            "OIL": bopd_val, "WATER": water_val,
-            "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
-        })
-    current_df = pd.DataFrame(base_rows)
-    history_rows = []
-    for d in range(14):
-        date_str = (datetime(2026, 6, 23) - pd.Timedelta(days=13 - d)).strftime("%Y-%m-%d")
-        for row in base_rows:
-            history_rows.append({**row, "date": date_str})
-    return current_df, pd.DataFrame(history_rows)
-
-@st.cache_data
-def generate_sample_locations():
-    rng = np.random.default_rng(42)
-    names = ["Hawk-1", "Hawk-2", "Falcon-3", "Falcon-4", "Condor-5", "Condor-6",
-             "Osprey-7", "Osprey-8", "Eagle-9", "Eagle-10", "Heron-11", "Heron-12"]
-    fields = ["North Block", "South Block", "East Flank"]
-    rows = []
-    for i, name in enumerate(names):
-        rng.integers(80, 500)  # discarded — keeps draw sequence aligned with generate_sample_data
-        roll = rng.random()
-        status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
-        rows.append({
-            "ALIAS": name, "field": fields[i % 3], "status": status,
-            "latitude": -2.5 + (i % 4) * 0.04 + rng.random() * 0.01,
-            "longitude": 110.5 + (i // 4) * 0.05 + rng.random() * 0.01,
-        })
-    return pd.DataFrame(rows)
-
-# ----------------------------------------------------------------------------
 # LOAD DATA
 # ----------------------------------------------------------------------------
 try:
@@ -161,12 +115,9 @@ except Exception as e:
     locations_df = pd.DataFrame(columns=LOCATION_HEAD_COLS)
     db_connected = False
 
-using_sample = wells_df is None or wells_df.empty
-if using_sample:
-    wells_df, history_df = generate_sample_data()
-    locations_df = generate_sample_locations()
-    if db_connected:
-        st.info("No data yet — showing sample data. Connect Supabase to load real data.")
+if wells_df is None or wells_df.empty:
+    st.warning("No data yet in Supabase — add rows to the 'ProdWellBasiss' table to see the dashboard.")
+    st.stop()
 
 if "injection_rate" not in wells_df.columns:
     wells_df["injection_rate"] = 0
@@ -183,7 +134,7 @@ wells_df["water_cut_pct"] = (
 ).round(1).fillna(0)
 
 missing_coords = wells_df["latitude"].isna() | wells_df["longitude"].isna()
-if missing_coords.any() and not using_sample:
+if missing_coords.any():
     st.warning(
         "These wells have no saved coordinates: "
         + ", ".join(wells_df.loc[missing_coords, "ALIAS"].tolist())
@@ -379,9 +330,9 @@ else:
         return fig
 
     with trend_tab1:
-        st.plotly_chart(make_trend_fig("OIL", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("OIL", "#22c55e", "rgba(34,197,94,0.2)",  "BOPD"), use_container_width=True)
     with trend_tab2:
-        st.plotly_chart(make_trend_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
+        st.plotly_chart(make_trend_fig("bfpd", "#eab308", "rgba(234,179,8,0.2)",  "BFPD"), use_container_width=True)
     with trend_tab3:
         st.plotly_chart(make_trend_fig("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
     with trend_tab4:
@@ -472,9 +423,9 @@ with detail_col:
             return fig
 
         with w_tab1:
-            st.plotly_chart(make_well_fig("OIL", "#eab308", "rgba(234,179,8,0.2)",  "BOPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("OIL", "#22c55e", "rgba(34,197,94,0.2)",  "BOPD"), use_container_width=True)
         with w_tab2:
-            st.plotly_chart(make_well_fig("bfpd", "#22c55e", "rgba(34,197,94,0.2)",  "BFPD"), use_container_width=True)
+            st.plotly_chart(make_well_fig("bfpd", "#eab308", "rgba(234,179,8,0.2)",  "BFPD"), use_container_width=True)
         with w_tab3:
             st.plotly_chart(make_well_fig("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
         with w_tab4:
@@ -502,8 +453,4 @@ display_df = filtered[["ALIAS", "field", "status", "bfpd", "OIL", "WATER",
              "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-if using_sample:
-    st.caption("⚠️ Showing sample data — upload a file in the ETL page to load real data.")
-else:
-    st.caption("✅ Showing live shared data from Supabase.")
+st.caption("✅ Showing live shared data from Supabase.")
