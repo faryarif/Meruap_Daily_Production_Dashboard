@@ -5,7 +5,7 @@ Run locally:
     pip install streamlit pandas plotly numpy supabase openpyxl
 
 Supabase tables needed:
-    - ProdWellBasiss : id, date, ALIAS, bfpd, OIL, injection_rate
+    - ProdWellBasiss : id, date, ALIAS, OIL, WATER, injection_rate  (bfpd = OIL + WATER)
     - HeaderID      : ALIAS, field, status, latitude, longitude
 
 Streamlit secrets (.streamlit/secrets.toml):
@@ -38,7 +38,7 @@ STATUS_COLORS = {
     "Plug Abandon": "#ef4444",
 }
 
-DATA_PROD_COLS     = ["date", "ALIAS", "bfpd", "OIL", "injection_rate"]
+DATA_PROD_COLS     = ["date", "ALIAS", "OIL", "WATER", "injection_rate"]
 LOCATION_HEAD_COLS = ["ALIAS", "field", "status", "latitude", "longitude"]
 
 # ----------------------------------------------------------------------------
@@ -84,12 +84,12 @@ def test_connection():
 def read_data():
     client = get_supabase()
     resp = client.table("ProdWellBasiss").select(
-        "date, ALIAS, bfpd, OIL, injection_rate"
+        "date, ALIAS, OIL, WATER, injection_rate"
     ).order("date").execute()
     if not resp.data:
         return None, pd.DataFrame(columns=DATA_PROD_COLS)
     df = pd.DataFrame(resp.data)
-    for col in ["OIL", "bfpd", "injection_rate"]:
+    for col in ["OIL", "WATER", "injection_rate"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
     latest_date = df["date"].max()
@@ -123,10 +123,10 @@ def generate_sample_data():
         roll = rng.random()
         status = "Down" if roll > 0.85 else "Shut-in" if roll > 0.75 else "Oil"
         bopd_val = int(base_rate) if status == "Oil" else 0
-        bfpd_val = int(bopd_val * 1.3) if status == "Oil" else 0
+        water_val = int(bopd_val * 0.3) if status == "Oil" else 0
         base_rows.append({
             "ALIAS": name,
-            "bfpd": bfpd_val, "OIL": bopd_val,
+            "OIL": bopd_val, "WATER": water_val,
             "injection_rate": int(base_rate * 0.8) if status in ("Injector", "Water Source") else 0,
         })
     current_df = pd.DataFrame(base_rows)
@@ -192,9 +192,10 @@ if "injection_rate" not in wells_df.columns:
 if not history_df.empty:
     history_df = history_df.merge(locations_df[["ALIAS", "status"]], on="ALIAS", how="left")
     history_df["status"] = history_df["status"].fillna("Unknown")
+    history_df["bfpd"] = history_df["OIL"] + history_df["WATER"]
 
+wells_df["bfpd"] = wells_df["OIL"] + wells_df["WATER"]
 wells_df = wells_df.merge(locations_df, on="ALIAS", how="left")
-wells_df["WATER"] = (wells_df["bfpd"] - wells_df["OIL"]).clip(lower=0)
 wells_df["water_cut_pct"] = (
     wells_df["WATER"] / wells_df["bfpd"].replace(0, np.nan) * 100
 ).round(1).fillna(0)
@@ -237,7 +238,6 @@ if selected_date_str and not history_df.empty and selected_date_str in history_d
     if "injection_rate" not in snap_df.columns:
         snap_df["injection_rate"] = 0
     snap_df = snap_df.merge(locations_df, on="ALIAS", how="left")
-    snap_df["WATER"] = (snap_df["bfpd"] - snap_df["OIL"]).clip(lower=0)
     snap_df["water_cut_pct"] = (
         snap_df["WATER"] / snap_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
@@ -272,8 +272,6 @@ if not history_df.empty:
         prev_date, curr_date = dates[-2], dates[-1]
         prev_df = history_df[history_df["date"] == prev_date].copy()
         curr_df = history_df[history_df["date"] == curr_date].copy()
-        prev_df["WATER"] = (prev_df["bfpd"] - prev_df["OIL"]).clip(lower=0)
-        curr_df["WATER"] = (curr_df["bfpd"] - curr_df["OIL"]).clip(lower=0)
         bopd_change         = int(curr_df["OIL"].sum()) - int(prev_df["OIL"].sum())
         injection_change    = int(curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum()) - \
                               int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
@@ -374,7 +372,6 @@ if agg_history.empty:
     st.caption("No history yet — upload data to see the trend.")
 else:
     trend_df = history_df.copy()
-    trend_df["WATER"] = (trend_df["bfpd"] - trend_df["OIL"]).clip(lower=0)
     trend_df["water_cut_pct"] = (
         trend_df["WATER"] / trend_df["bfpd"].replace(0, np.nan) * 100
     ).round(1).fillna(0)
@@ -467,7 +464,6 @@ with detail_col:
     if well_history.empty:
         st.caption(f"No history yet for {selected_well}.")
     else:
-        well_history["WATER"] = (well_history["bfpd"] - well_history["OIL"]).clip(lower=0)
         well_history["water_cut_pct"] = (
             well_history["WATER"] / well_history["bfpd"].replace(0, np.nan) * 100
         ).round(1).fillna(0)
