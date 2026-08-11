@@ -316,17 +316,33 @@ else:
 
     trend_tab1, trend_tab2, trend_tab3, trend_tab4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
 
+    def add_trendline(fig, y_series):
+        """Overlay a dashed linear-regression trendline, visually distinct from the actual fluctuating line."""
+        x_numeric = np.arange(len(y_series))
+        if len(x_numeric) >= 2:
+            slope, intercept = np.polyfit(x_numeric, y_series.values, 1)
+            trend_vals = slope * x_numeric + intercept
+            fig.add_trace(go.Scatter(
+                x=trend_agg["date"], y=trend_vals,
+                mode="lines", name="Trend",
+                line=dict(color="#f8fafc", width=2, dash="dash"),
+                hoverinfo="skip",
+            ))
+        return fig
+
     def make_trend_fig(y_col, line_color, fill_color, y_title):
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg[y_col],
-            mode="lines", fill="tozeroy",
+            mode="lines", fill="tozeroy", name="Actual",
             line=dict(color=line_color, width=2), fillcolor=fill_color,
         ))
+        add_trendline(fig, trend_agg[y_col])
         fig.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
             paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
-            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
+            xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title),
+            legend=dict(font=dict(color="#e2e8f0"), orientation="h", yanchor="bottom", y=1.02))
         return fig
 
     with trend_tab1:
@@ -339,14 +355,16 @@ else:
         fig_wc = go.Figure()
         fig_wc.add_trace(go.Scatter(
             x=trend_agg["date"], y=trend_agg["water_cut_pct"],
-            mode="lines+markers", fill="tozeroy",
+            mode="lines+markers", fill="tozeroy", name="Actual",
             line=dict(color="#ef4444", width=2), fillcolor="rgba(239,68,68,0.15)",
         ))
+        add_trendline(fig_wc, trend_agg["water_cut_pct"])
         fig_wc.update_layout(
             height=280, margin=dict(l=0, r=0, t=10, b=0),
             paper_bgcolor="#0b1220", plot_bgcolor="#0b1220", font=dict(color="#94a3b8"),
             xaxis=dict(gridcolor="#263144"),
-            yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
+            yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]),
+            legend=dict(font=dict(color="#e2e8f0"), orientation="h", yanchor="bottom", y=1.02))
         st.plotly_chart(fig_wc, use_container_width=True)
 
 # ----------------------------------------------------------------------------
@@ -453,4 +471,5 @@ display_df = filtered[["ALIAS", "field", "status", "bfpd", "OIL", "WATER",
              "water_cut_pct": "Water Cut (%)", "injection_rate": "Injection Rate"}
 )
 st.dataframe(display_df, use_container_width=True, hide_index=True)
+
 st.caption("✅ Showing live shared data from Supabase.")
