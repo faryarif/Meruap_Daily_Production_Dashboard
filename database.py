@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import streamlit as st
 from supabase import create_client
@@ -39,9 +40,15 @@ def _normalize_production(df):
 
     if "bfpd" not in df.columns:
         df["bfpd"] = df["OIL"] + df["WATER"]
+
     if "water_cut_pct" not in df.columns:
-        bfpd = df["bfpd"].replace(0, pd.NA)
-        df["water_cut_pct"] = (df["WATER"] / bfpd * 100).round(1).fillna(0)
+        bfpd = pd.to_numeric(df["bfpd"], errors="coerce").fillna(0)
+        water = pd.to_numeric(df["WATER"], errors="coerce").fillna(0)
+        df["water_cut_pct"] = np.where(
+            bfpd > 0,
+            (water / bfpd * 100).round(1),
+            0.0,
+        )
 
     return df
 
