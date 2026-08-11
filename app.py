@@ -19,13 +19,13 @@ try:
     dates = sorted(trend_df["date"].dropna().unique(), reverse=True) if not trend_df.empty else []
     wells_df = read_snapshot(dates[0]) if dates else pd.DataFrame(columns=DATA_PROD_COLS)
 except Exception as exc:
-    st.error(f"Couldn't connect to Supabase - check your secrets configuration. Details: {exc}")
+    st.error(f"Couldn't load dashboard data. Check your Supabase connection/query configuration. Details: {exc}")
     wells_df = pd.DataFrame(columns=DATA_PROD_COLS)
     trend_df = pd.DataFrame()
     locations_df = pd.DataFrame(columns=LOCATION_HEAD_COLS)
 
 if wells_df.empty:
-    st.warning("No data yet in Supabase - add rows to the 'ProdWellBasiss' table to see the dashboard.")
+    st.warning("No production snapshot is available in Supabase.")
     st.stop()
 
 col_title, col_date, col_filter = st.columns([3, 1, 1])
@@ -67,8 +67,12 @@ if trend_df.empty:
     st.caption("No history yet - upload data to see the trend.")
 else:
     trend_agg = trend_df.copy()
+    trend_agg["OIL"] = pd.to_numeric(trend_agg["OIL"], errors="coerce").fillna(0.0)
+    trend_agg["WATER"] = pd.to_numeric(trend_agg["WATER"], errors="coerce").fillna(0.0)
     trend_agg["bfpd"] = trend_agg["OIL"] + trend_agg["WATER"]
-    trend_agg["water_cut_pct"] = (trend_agg["WATER"] / trend_agg["bfpd"].replace(0, pd.NA) * 100).round(1).fillna(0)
+    # Avoid pandas nullable NAType here: replace zero denominators with NaN.
+    bfpd = trend_agg["bfpd"]
+    trend_agg["water_cut_pct"] = (trend_agg["WATER"] / bfpd.where(bfpd.ne(0), float("nan")) * 100.0).round(1).fillna(0.0)
     t1, t2, t3, t4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
     with t1: st.plotly_chart(make_trend_fig(trend_agg, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
     with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
@@ -107,7 +111,7 @@ with detail_col:
         well_history = well_history.sort_values("date")
         w1, w2, w3, w4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
         with w1: st.plotly_chart(make_well_history_fig(well_history, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-        with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eab308", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
+        with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eabf00", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
         with w3: st.plotly_chart(make_well_history_fig(well_history, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
         with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#ef4444", "rgba(239,68,68,0.15)", "Water Cut (%)"), use_container_width=True)
 
