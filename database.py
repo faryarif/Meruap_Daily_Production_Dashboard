@@ -13,42 +13,78 @@ def get_supabase():
     )
 
 
-@st.cache_data(ttl=30, show_spinner=False)
-def read_data():
-    client = get_supabase()
-    resp = (
-        client.table("ProdWellBasiss")
-        .select("date, ALIAS, OIL, WATER, injection_rate")
-        .order("date")
-        .execute()
-    )
-    if not resp.data:
-        return None, pd.DataFrame(columns=DATA_PROD_COLS)
+def _rpc_df(function_name, params=None):
+    response = get_supabase().rpc(function_name, params or {}).execute()
+    return pd.DataFrame(response.data or [])
 
-    df = pd.DataFrame(resp.data)
+
+def _normalize_production(df):
+    if df.empty:
+        return pd.DataFrame(columns=DATA_PROD_COLS)
+
+    df = df.rename(columns={
+        "oil": "OIL",
+        "water": "WATER",
+        "bfpd": "bfpd",
+        "injection_rate": "injection_rate",
+    })
+
     for col in NUMERIC_PROD_COLS:
         if col not in df.columns:
             df[col] = 0
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
-    latest_date = df["date"].max()
-    current_df = df[df["date"] == latest_date].drop(columns=["date"]).reset_index(drop=True)
-    return current_df, df
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+
+    if "bfpd" not in df.columns:
+        df["bfpd"] = df["OIL"] + df["WATER"]
+    if "water_cut_pct" not in df.columns:
+        bfpd = df["bfpd"].replace(0, pd.NA)
+        df["water_cut_pct"] = (df["WATER"] / bfpd * 100).round(1).fillna(0)
+
+    return df
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False)
+def read_snapshot(date_str=None):
+    params = {"p_date": date_str} if date_str else {}
+    return _normalize_production(_rpc_df("dashboard_snapshot", params))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def read_daily_trend(start_date=None, end_date=None):
+    params = {}
+    if start_date:
+        params["p_start_date"] = start_date
+    if end_date:
+        params["p_end_date"] = end_date
+    return _normalize_production(_rpc_df("dashboard_daily_trend", params))
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def read_well_history(alias, start_date=None, end_date=None):
+    params = {"p_alias": alias}
+    if start_date:
+        params["p_start_date"] = start_date
+    if end_date:
+        params["p_end_date"] = end_date
+    return _normalize_production(_rpc_df("dashboard_well_history", params))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def read_locations():
-    client = get_supabase()
-    resp = (
-        client.table("HeaderID")
+    response = (
+        get_supabase()
+        .table("HeaderID")
         .select("ALIAS, field, status, latitude, longitude")
+        .order("ALIAS")
         .execute()
     )
-    if not resp.data:
+    if not response.data:
         return pd.DataFrame(columns=LOCATION_HEAD_COLS)
 
-    df = pd.DataFrame(resp.data)
+    df = pd.DataFrame(response.data)
     for col in ["latitude", "longitude"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
