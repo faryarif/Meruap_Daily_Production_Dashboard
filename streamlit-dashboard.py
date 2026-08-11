@@ -251,7 +251,7 @@ with pie_col:
         font=dict(color="#e2e8f0"))
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    field_totals = display_wells.groupby("field")["OIL"].sum().reset_index()
+    field_totals = filtered.groupby("field")["OIL"].sum().reset_index()
     field_order = ["North", "South", "East", "West"]
     field_totals["sort_key"] = field_totals["field"].apply(
         lambda f: next((i for i, k in enumerate(field_order) if k.lower() in f.lower()), len(field_order))
