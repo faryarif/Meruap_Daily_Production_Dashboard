@@ -19,32 +19,26 @@ def calculate_kpis(filtered_df):
     }
 
 
-def calculate_daily_changes(history_df):
+def calculate_daily_changes(trend_df):
     changes = {
         "bopd_change": None,
         "injection_change": None,
         "water_prod_change": None,
         "water_source_change": None,
     }
-    if history_df.empty:
+    if trend_df is None or trend_df.empty or "date" not in trend_df.columns:
         return changes
 
-    dates = sorted(history_df["date"].dropna().unique())
-    if len(dates) < 2:
+    trend = trend_df.sort_values("date").copy()
+    if len(trend) < 2:
         return changes
 
-    prev_date, curr_date = dates[-2], dates[-1]
-    prev_df = history_df[history_df["date"] == prev_date]
-    curr_df = history_df[history_df["date"] == curr_date]
-
-    changes["bopd_change"] = int(curr_df["OIL"].sum()) - int(prev_df["OIL"].sum())
-    changes["injection_change"] = int(
-        curr_df.loc[curr_df["status"] == "Injector", "injection_rate"].sum()
-    ) - int(prev_df.loc[prev_df["status"] == "Injector", "injection_rate"].sum())
-    changes["water_prod_change"] = int(curr_df["WATER"].sum()) - int(prev_df["WATER"].sum())
-    changes["water_source_change"] = int(
-        curr_df.loc[curr_df["status"] == "Water Source", "WATER"].sum()
-    ) - int(prev_df.loc[prev_df["status"] == "Water Source", "WATER"].sum())
+    prev = trend.iloc[-2]
+    curr = trend.iloc[-1]
+    changes["bopd_change"] = int(curr.get("OIL", 0)) - int(prev.get("OIL", 0))
+    changes["injection_change"] = int(curr.get("injection_rate", 0)) - int(prev.get("injection_rate", 0))
+    changes["water_prod_change"] = int(curr.get("WATER", 0)) - int(prev.get("WATER", 0))
+    changes["water_source_change"] = int(curr.get("water_source_rate", 0)) - int(prev.get("water_source_rate", 0))
     return changes
 
 
@@ -52,32 +46,29 @@ def aggregate_production_trend(history_df):
     if history_df.empty:
         return pd.DataFrame(columns=["date", "bfpd", "OIL", "WATER", "water_cut_pct"])
 
-    trend_agg = (
-        history_df.groupby("date")
-        .agg(
-            bfpd=("bfpd", "sum"),
-            OIL=("OIL", "sum"),
-            WATER=("WATER", "sum"),
-            water_cut_pct=("water_cut_pct", "mean"),
+    if {"bfpd", "OIL", "WATER", "water_cut_pct"}.issubset(history_df.columns):
+        return (
+            history_df[["date", "bfpd", "OIL", "WATER"]]
+            .groupby("date", as_index=False)
+            .agg(bfpd=("bfpd", "sum"), OIL=("OIL", "sum"), WATER=("WATER", "sum"))
+            .assign(water_cut_pct=lambda df: (df["WATER"] / df["bfpd"].replace(0, pd.NA) * 100).round(1).fillna(0))
+            .sort_values("date")
         )
-        .reset_index()
-        .sort_values("date")
-    )
-    trend_agg["water_cut_pct"] = trend_agg["water_cut_pct"].round(1)
-    return trend_agg
+    return history_df
 
 
 def aggregate_injection_trend(history_df):
     if history_df.empty:
         return pd.DataFrame(columns=["date", "status", "injection_rate"])
 
-    inj_hist = history_df[history_df["status"].isin(["Injector", "Water Source"])]
-    if inj_hist.empty:
-        return pd.DataFrame(columns=["date", "status", "injection_rate"])
-
-    return (
-        inj_hist.groupby(["date", "status"])["injection_rate"]
-        .sum()
-        .reset_index()
-        .sort_values("date")
-    )
+    if {"date", "injection_rate", "status"}.issubset(history_df.columns):
+        inj_hist = history_df[history_df["status"].isin(["Injector", "Water Source"])]
+        if inj_hist.empty:
+            return pd.DataFrame(columns=["date", "status", "injection_rate"])
+        return (
+            inj_hist.groupby(["date", "status"])["injection_rate"]
+            .sum()
+            .reset_index()
+            .sort_values("date")
+        )
+    return pd.DataFrame(columns=["date", "status", "injection_rate"])
