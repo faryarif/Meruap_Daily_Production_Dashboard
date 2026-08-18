@@ -93,18 +93,35 @@ def extract_wds_file(uploaded_file):
                 return columns[name.lower()]
         return None
 
-    well_col, oil_col, water_col = col("well"), col("bo", "oil"), col("bw", "water")
+    well_col = col("well")
+    oil_col = col("bo", "oil")
+    water_col = col("bw", "water")
+    gas_col = col("gas casing mcf", "gas casing", "gas_casing", "gas mcf", "gas")
+
     if not all([well_col, oil_col, water_col]):
         raise ValueError("Required columns Well, BO and BW were not found.")
 
-    out = table[[well_col, oil_col, water_col]].copy()
-    out.columns = ["ALIAS", "OIL", "WATER"]
+    out_cols = [well_col, oil_col, water_col]
+    if gas_col is not None:
+        out_cols.append(gas_col)
+
+    out = table[out_cols].copy()
+    renamed = ["ALIAS", "OIL", "WATER"]
+    if gas_col is not None:
+        renamed.append("GAS")
+    out.columns = renamed
+
     out["ALIAS"] = out["ALIAS"].map(_normalise_well)
     out["OIL"] = pd.to_numeric(out["OIL"], errors="coerce").fillna(0.0)
     out["WATER"] = pd.to_numeric(out["WATER"], errors="coerce").fillna(0.0)
+    if "GAS" in out.columns:
+        out["GAS"] = pd.to_numeric(out["GAS"], errors="coerce").fillna(0.0)
+    else:
+        out["GAS"] = 0.0
+
     out = out[out["ALIAS"].notna() & out["ALIAS"].astype(str).str.strip().ne("")].copy()
     out["date"] = report_date.isoformat()
-    return out[["date", "ALIAS", "OIL", "WATER"]].drop_duplicates(["date", "ALIAS"], keep="last")
+    return out[["date", "ALIAS", "OIL", "WATER", "GAS"]].drop_duplicates(["date", "ALIAS"], keep="last")
 
 
 def process_wds_files(uploaded_files):
@@ -116,7 +133,7 @@ def process_wds_files(uploaded_files):
             frames.append(df)
         except Exception as exc:
             errors.append({"file": file.name, "error": str(exc)})
-    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "source_file"])
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "GAS", "source_file"])
     if not result.empty:
         result = result.sort_values(["date", "ALIAS"]).drop_duplicates(["date", "ALIAS"], keep="last").reset_index(drop=True)
     return result, pd.DataFrame(errors, columns=["file", "error"])
@@ -140,12 +157,9 @@ def upload_wds_production(df):
         return 0
 
     client = _admin_client()
-    upload_df = df[["date", "ALIAS", "OIL", "WATER"]].copy()
-
-    # UNIQUEID is a required legacy key in ProdWellBasiss. Existing records
-    # consistently use '<ALIAS>:AllLayer', so WDS rows must populate it too.
+    upload_df = df[["date", "ALIAS", "OIL", "WATER", "GAS"]].copy()
     upload_df["UNIQUEID"] = upload_df["ALIAS"].astype(str) + ":AllLayer"
-    records = upload_df[["UNIQUEID", "date", "ALIAS", "OIL", "WATER"]].to_dict(orient="records")
+    records = upload_df[["UNIQUEID", "date", "ALIAS", "OIL", "WATER", "GAS"]].to_dict(orient="records")
 
     for start in range(0, len(records), 1000):
         response = client.table("ProdWellBasiss").upsert(
