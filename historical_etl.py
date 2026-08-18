@@ -1,6 +1,6 @@
 import io
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
@@ -8,41 +8,26 @@ from supabase import create_client
 
 
 def _parse_report_date(value):
-    """Parse WDS dates without letting pandas misinterpret 2-digit years.
-
-    WDS reports may contain a true Excel datetime, an Excel serial date, or a
-    text date such as 13-07-26 / 13-07-2026. Two-digit years are explicitly
-    mapped to 2000-2069 rather than relying on pandas' date inference.
-    """
+    """Parse WDS dates without letting pandas misinterpret 2-digit years."""
     if pd.isna(value):
         return None
-
     if isinstance(value, (pd.Timestamp, datetime, date)):
         return pd.Timestamp(value).date()
-
-    # Excel serial date (1900 date system). Only accept plausible serials.
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         number = float(value)
         if 20000 <= number <= 80000:
-            parsed = pd.Timestamp("1899-12-30") + pd.to_timedelta(number, unit="D")
-            return parsed.date()
-
+            return (pd.Timestamp("1899-12-30") + pd.to_timedelta(number, unit="D")).date()
     text = str(value).strip()
     if not text:
         return None
-
-    # Prefer an explicit numeric date embedded in text.
     match = re.search(r"(\d{1,2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{2}|\d{4})", text)
     if match:
         day, month, year = map(int, match.groups())
-        if year < 100:
-            year += 2000 if year <= 69 else 1900
+        year += 2000 if year < 100 and year <= 69 else 1900 if year < 100 else 0
         try:
             return date(year, month, day)
         except ValueError:
             return None
-
-    # Then handle textual dates such as 13 July 2026.
     match = re.search(r"([A-Za-z]{3,9})\s+(\d{1,2})[,\s]+(\d{4})", text)
     if match:
         try:
@@ -52,19 +37,15 @@ def _parse_report_date(value):
                 return pd.to_datetime(match.group(0), errors="raise").date()
             except ValueError:
                 return None
-
     return None
 
 
 def _find_date(raw_df, filename=""):
-    # First inspect the report header. WDS date is normally in the first rows.
     for r in range(min(15, len(raw_df))):
         for value in raw_df.iloc[r].tolist():
             parsed = _parse_report_date(value)
             if parsed is not None and 1990 <= parsed.year <= 2100:
                 return parsed
-
-    # Last-resort fallback: WDS filenames commonly contain DD-MM-YYYY.
     filename_match = re.search(r"(\d{1,2})[-_](\d{1,2})[-_](\d{4})", str(filename))
     if filename_match:
         day, month, year = map(int, filename_match.groups())
@@ -72,7 +53,6 @@ def _find_date(raw_df, filename=""):
             return date(year, month, day)
         except ValueError:
             pass
-
     return None
 
 
@@ -136,7 +116,6 @@ def process_wds_files(uploaded_files):
             frames.append(df)
         except Exception as exc:
             errors.append({"file": file.name, "error": str(exc)})
-
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "source_file"])
     if not result.empty:
         result = result.sort_values(["date", "ALIAS"]).drop_duplicates(["date", "ALIAS"], keep="last").reset_index(drop=True)
@@ -156,15 +135,24 @@ def _admin_client():
 
 
 def upload_wds_production(df):
-    """Upsert only date/ALIAS/OIL/WATER; do not overwrite an existing injection_rate."""
+    """Upsert WDS data while preserving existing injection_rate values."""
     if df.empty:
         return 0
+
     client = _admin_client()
-    records = df[["date", "ALIAS", "OIL", "WATER"]].to_dict(orient="records")
+    upload_df = df[["date", "ALIAS", "OIL", "WATER"]].copy()
+
+    # UNIQUEID is a required legacy key in ProdWellBasiss. Existing records
+    # consistently use '<ALIAS>:AllLayer', so WDS rows must populate it too.
+    upload_df["UNIQUEID"] = upload_df["ALIAS"].astype(str) + ":AllLayer"
+    records = upload_df[["UNIQUEID", "date", "ALIAS", "OIL", "WATER"]].to_dict(orient="records")
+
     for start in range(0, len(records), 1000):
-        client.table("ProdWellBasiss").upsert(
+        response = client.table("ProdWellBasiss").upsert(
             records[start:start + 1000],
             on_conflict="date,ALIAS",
             default_to_null=False,
         ).execute()
+        if response.data is None:
+            raise RuntimeError("Supabase returned no data while uploading WDS production records.")
     return len(records)
