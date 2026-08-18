@@ -9,6 +9,7 @@ from helpers import filter_by_field, field_options, missing_coordinate_aliases
 from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
+from upload import normalize_production, read_excel, upsert_production
 
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
 inject_styles(st)
@@ -38,6 +39,54 @@ with col_date:
     selected_date_str = selected_date.strftime("%Y-%m-%d")
 with col_filter:
     field_filter = st.selectbox("Field", field_options(wells_df))
+
+# -----------------------------------------------------------------------------
+# Excel uploader / ETL
+# -----------------------------------------------------------------------------
+with st.expander("📥 Update Production Data", expanded=False):
+    st.caption("Upload an Excel production file. The dashboard validates the data and upserts records using date + ALIAS as the unique key.")
+    uploaded_file = st.file_uploader(
+        "Drag & drop Excel file here",
+        type=["xlsx", "xls"],
+        accept_multiple_files=False,
+        key="production_excel_uploader",
+    )
+
+    if uploaded_file is not None:
+        try:
+            sheets = read_excel(uploaded_file)
+            sheet_name = st.selectbox("Excel sheet", list(sheets.keys()), key="production_sheet_selector")
+            cleaned_df, validation_errors = normalize_production(sheets[sheet_name])
+
+            if validation_errors:
+                st.warning("Validation notes: " + " | ".join(validation_errors))
+
+            if cleaned_df.empty:
+                st.error("No valid rows are available for upload.")
+            else:
+                st.success(f"{len(cleaned_df):,} valid row(s) ready for upload.")
+                st.dataframe(cleaned_df.head(100), use_container_width=True, hide_index=True)
+
+                min_date = cleaned_df["date"].min()
+                max_date = cleaned_df["date"].max()
+                st.caption(f"Date range: {min_date} → {max_date} · Unique date/well keys: {cleaned_df[['date', 'ALIAS']].drop_duplicates().shape[0]:,}")
+
+                confirm = st.checkbox("I have reviewed the preview and want to update Supabase.", key="confirm_production_upload")
+                if st.button("Upload to Supabase", type="primary", disabled=not confirm, key="upload_production_button"):
+                    with st.spinner("Uploading production data to Supabase..."):
+                        try:
+                            result = upsert_production(cleaned_df, uploaded_file.name)
+                            st.cache_data.clear()
+                            st.success(
+                                f"Upload complete — {result['rows']:,} rows processed "
+                                f"({result['inserted']:,} new, {result['updated']:,} updated). Refreshing dashboard..."
+                            )
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Upload failed: {exc}")
+        except Exception as exc:
+            st.error(f"Could not read the Excel file: {exc}")
+
 
 display_wells = wells_df if selected_date_str == dates[0] else read_snapshot(selected_date_str)
 filtered = filter_by_field(display_wells, field_filter)
@@ -72,7 +121,7 @@ else:
     trend_agg["water_cut_pct"] = (trend_agg["WATER"] / denominator * 100).round(1).fillna(0.0)
     t1, t2, t3, t4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
     with t1: st.plotly_chart(make_trend_fig(trend_agg, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
+    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
     with t3: st.plotly_chart(make_trend_fig(trend_agg, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
     with t4: st.plotly_chart(make_water_cut_trend_fig(trend_agg), use_container_width=True)
 
