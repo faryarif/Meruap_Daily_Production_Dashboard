@@ -10,6 +10,7 @@ from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
 from upload import normalize_production, read_excel, upsert_production
+from historical_uploader import render_wds_uploader
 
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
 inject_styles(st)
@@ -41,7 +42,12 @@ with col_filter:
     field_filter = st.selectbox("Field", field_options(wells_df))
 
 # -----------------------------------------------------------------------------
-# Excel uploader / ETL
+# Historical WDS batch ETL
+# -----------------------------------------------------------------------------
+render_wds_uploader()
+
+# -----------------------------------------------------------------------------
+# Single Excel uploader / ETL
 # -----------------------------------------------------------------------------
 with st.expander("📥 Update Production Data", expanded=False):
     st.caption("Upload an Excel production file. The dashboard validates the data and upserts records using date + ALIAS as the unique key.")
@@ -121,7 +127,7 @@ else:
     trend_agg["water_cut_pct"] = (trend_agg["WATER"] / denominator * 100).round(1).fillna(0.0)
     t1, t2, t3, t4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
     with t1: st.plotly_chart(make_trend_fig(trend_agg, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
+    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
     with t3: st.plotly_chart(make_trend_fig(trend_agg, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
     with t4: st.plotly_chart(make_water_cut_trend_fig(trend_agg), use_container_width=True)
 
@@ -157,7 +163,7 @@ with detail_col:
         well_history = well_history.sort_values("date")
         w1, w2, w3, w4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
         with w1: st.plotly_chart(make_well_history_fig(well_history, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-        with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eab308", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
+        with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
         with w3: st.plotly_chart(make_well_history_fig(well_history, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
         with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#ef4444", "rgba(239,68,68,0.15)", "Water Cut (%)"), use_container_width=True)
 
