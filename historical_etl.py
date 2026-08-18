@@ -1,12 +1,12 @@
 import io
 import re
-from datetime import datetime
 
 import pandas as pd
+import streamlit as st
+from supabase import create_client
 
 
 def _find_date(raw_df):
-    """Find a date anywhere in the first ~15 rows of the report header."""
     for r in range(min(15, len(raw_df))):
         for value in raw_df.iloc[r].tolist():
             if pd.isna(value):
@@ -29,7 +29,6 @@ def _normalise_well(value):
     if pd.isna(value):
         return None
     text = str(value).strip()
-    # WDS convention: M # 01 -> M-01, while preserving suffixes such as M # 06 C.
     match = re.match(r"^\s*([A-Za-z]+)\s*#\s*(\d+)\s*([A-Za-z]*)\s*$", text)
     if match:
         return f"{match.group(1).upper()}-{int(match.group(2)):02d}{match.group(3).upper()}"
@@ -45,7 +44,8 @@ def _find_header_row(raw_df):
 
 
 def extract_wds_file(uploaded_file):
-    raw = pd.read_excel(io.BytesIO(uploaded_file.getvalue()), header=None, engine="openpyxl")
+    raw_bytes = uploaded_file.getvalue()
+    raw = pd.read_excel(io.BytesIO(raw_bytes), header=None, engine="openpyxl")
     report_date = _find_date(raw)
     header_row = _find_header_row(raw)
     if report_date is None:
@@ -53,7 +53,7 @@ def extract_wds_file(uploaded_file):
     if header_row is None:
         raise ValueError("Could not find Well / BO / BW columns.")
 
-    table = pd.read_excel(io.BytesIO(uploaded_file.getvalue()), header=header_row, engine="openpyxl")
+    table = pd.read_excel(io.BytesIO(raw_bytes), header=header_row, engine="openpyxl")
     columns = {str(c).strip().lower(): c for c in table.columns}
 
     def col(*names):
@@ -62,29 +62,22 @@ def extract_wds_file(uploaded_file):
                 return columns[name.lower()]
         return None
 
-    well_col = col("well")
-    oil_col = col("bo", "oil")
-    water_col = col("bw", "water")
+    well_col, oil_col, water_col = col("well"), col("bo", "oil"), col("bw", "water")
     if not all([well_col, oil_col, water_col]):
         raise ValueError("Required columns Well, BO and BW were not found.")
 
     out = table[[well_col, oil_col, water_col]].copy()
     out.columns = ["ALIAS", "OIL", "WATER"]
     out["ALIAS"] = out["ALIAS"].map(_normalise_well)
-    out["OIL"] = pd.to_numeric(out["OIL"], errors="coerce")
-    out["WATER"] = pd.to_numeric(out["WATER"], errors="coerce")
+    out["OIL"] = pd.to_numeric(out["OIL"], errors="coerce").fillna(0.0)
+    out["WATER"] = pd.to_numeric(out["WATER"], errors="coerce").fillna(0.0)
     out = out[out["ALIAS"].notna() & out["ALIAS"].astype(str).str.strip().ne("")].copy()
-    out["OIL"] = out["OIL"].fillna(0.0)
-    out["WATER"] = out["WATER"].fillna(0.0)
     out["date"] = str(report_date)
-    out = out[["date", "ALIAS", "OIL", "WATER"]]
-    out = out.drop_duplicates(["date", "ALIAS"], keep="last")
-    return out
+    return out[["date", "ALIAS", "OIL", "WATER"]].drop_duplicates(["date", "ALIAS"], keep="last")
 
 
 def process_wds_files(uploaded_files):
-    frames = []
-    errors = []
+    frames, errors = [], []
     for file in uploaded_files:
         try:
             df = extract_wds_file(file)
@@ -93,10 +86,8 @@ def process_wds_files(uploaded_files):
         except Exception as exc:
             errors.append({"file": file.name, "error": str(exc)})
 
-    if not frames:
-        result = pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "source_file"])
-    else:
-        result = pd.concat(frames, ignore_index=True)
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "source_file"])
+    if not result.empty:
         result = result.sort_values(["date", "ALIAS"]).drop_duplicates(["date", "ALIAS"], keep="last").reset_index(drop=True)
     return result, pd.DataFrame(errors, columns=["file", "error"])
 
@@ -106,3 +97,23 @@ def to_excel_bytes(df):
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Production")
     return buffer.getvalue()
+
+
+def _admin_client():
+    key = st.secrets["supabase"]["service_role_key"]
+    return create_client(st.secrets["supabase"]["url"].rstrip("/"), key)
+
+
+def upload_wds_production(df):
+    """Upsert only date/ALIAS/OIL/WATER; do not overwrite an existing injection_rate."""
+    if df.empty:
+        return 0
+    client = _admin_client()
+    records = df[["date", "ALIAS", "OIL", "WATER"]].to_dict(orient="records")
+    for start in range(0, len(records), 1000):
+        client.table("ProdWellBasiss").upsert(
+            records[start:start + 1000],
+            on_conflict="date,ALIAS",
+            default_to_null=False,
+        ).execute()
+    return len(records)
