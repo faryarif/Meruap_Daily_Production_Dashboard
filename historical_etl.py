@@ -1,27 +1,78 @@
 import io
 import re
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 import streamlit as st
 from supabase import create_client
 
 
-def _find_date(raw_df):
+def _parse_report_date(value):
+    """Parse WDS dates without letting pandas misinterpret 2-digit years.
+
+    WDS reports may contain a true Excel datetime, an Excel serial date, or a
+    text date such as 13-07-26 / 13-07-2026. Two-digit years are explicitly
+    mapped to 2000-2069 rather than relying on pandas' date inference.
+    """
+    if pd.isna(value):
+        return None
+
+    if isinstance(value, (pd.Timestamp, datetime, date)):
+        return pd.Timestamp(value).date()
+
+    # Excel serial date (1900 date system). Only accept plausible serials.
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+        if 20000 <= number <= 80000:
+            parsed = pd.Timestamp("1899-12-30") + pd.to_timedelta(number, unit="D")
+            return parsed.date()
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # Prefer an explicit numeric date embedded in text.
+    match = re.search(r"(\d{1,2})\s*[-/]\s*(\d{1,2})\s*[-/]\s*(\d{2}|\d{4})", text)
+    if match:
+        day, month, year = map(int, match.groups())
+        if year < 100:
+            year += 2000 if year <= 69 else 1900
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+
+    # Then handle textual dates such as 13 July 2026.
+    match = re.search(r"([A-Za-z]{3,9})\s+(\d{1,2})[,\s]+(\d{4})", text)
+    if match:
+        try:
+            return pd.to_datetime(match.group(0), format="%B %d %Y", errors="raise").date()
+        except ValueError:
+            try:
+                return pd.to_datetime(match.group(0), errors="raise").date()
+            except ValueError:
+                return None
+
+    return None
+
+
+def _find_date(raw_df, filename=""):
+    # First inspect the report header. WDS date is normally in the first rows.
     for r in range(min(15, len(raw_df))):
         for value in raw_df.iloc[r].tolist():
-            if pd.isna(value):
-                continue
-            text = str(value).strip()
-            match = re.search(r"(?:date\s*[:\-]?\s*)?(\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4})", text, re.I)
-            if match:
-                parsed = pd.to_datetime(match.group(1), dayfirst=True, errors="coerce")
-                if not pd.isna(parsed):
-                    return parsed.date()
-            match = re.search(r"(?:date\s*[:\-]?\s*)?([A-Za-z]{3,9}\s+\d{1,2}[,\s]+\d{4})", text, re.I)
-            if match:
-                parsed = pd.to_datetime(match.group(1), errors="coerce")
-                if not pd.isna(parsed):
-                    return parsed.date()
+            parsed = _parse_report_date(value)
+            if parsed is not None and 1990 <= parsed.year <= 2100:
+                return parsed
+
+    # Last-resort fallback: WDS filenames commonly contain DD-MM-YYYY.
+    filename_match = re.search(r"(\d{1,2})[-_](\d{1,2})[-_](\d{4})", str(filename))
+    if filename_match:
+        day, month, year = map(int, filename_match.groups())
+        try:
+            return date(year, month, day)
+        except ValueError:
+            pass
+
     return None
 
 
@@ -46,10 +97,10 @@ def _find_header_row(raw_df):
 def extract_wds_file(uploaded_file):
     raw_bytes = uploaded_file.getvalue()
     raw = pd.read_excel(io.BytesIO(raw_bytes), header=None, engine="openpyxl")
-    report_date = _find_date(raw)
+    report_date = _find_date(raw, getattr(uploaded_file, "name", ""))
     header_row = _find_header_row(raw)
     if report_date is None:
-        raise ValueError("Could not find the report date in the header.")
+        raise ValueError("Could not find a valid report date in the header or filename.")
     if header_row is None:
         raise ValueError("Could not find Well / BO / BW columns.")
 
@@ -72,7 +123,7 @@ def extract_wds_file(uploaded_file):
     out["OIL"] = pd.to_numeric(out["OIL"], errors="coerce").fillna(0.0)
     out["WATER"] = pd.to_numeric(out["WATER"], errors="coerce").fillna(0.0)
     out = out[out["ALIAS"].notna() & out["ALIAS"].astype(str).str.strip().ne("")].copy()
-    out["date"] = str(report_date)
+    out["date"] = report_date.isoformat()
     return out[["date", "ALIAS", "OIL", "WATER"]].drop_duplicates(["date", "ALIAS"], keep="last")
 
 
