@@ -113,6 +113,6 @@ with detail_col:
         with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#ef4444", "rgba(239,68,68,0.15)", "Water Cut (%)"), use_container_width=True)
 
 st.subheader("Well Data")
-table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate", "latitude", "longitude"]
+table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
 visible_cols = [c for c in table_cols if c in filtered.columns]
 st.dataframe(filtered[visible_cols].sort_values("OIL", ascending=False), use_container_width=True, hide_index=True)
