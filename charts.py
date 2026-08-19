@@ -83,8 +83,8 @@ def make_water_cut_trend_fig(trend_agg):
     fig = make_trend_fig(
         trend_agg,
         "water_cut_pct",
-        "#ef4444",
-        "rgba(239,68,68,0.15)",
+        "#38bdf8",
+        "rgba(56,189,248,0.15)",
         "Water Cut (%)",
         markers=True,
     )
