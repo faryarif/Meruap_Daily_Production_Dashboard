@@ -53,7 +53,8 @@ if missing_aliases:
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Production", f"{kpis['total_bopd']:,} BOPD", f"{changes['bopd_change']:+,} BOPD vs yesterday" if changes["bopd_change"] is not None else None)
-c2.metric("Total Injection", f"{kpis['total_injection']:,} Barrels", f"{changes['injection_change']:+,} Barrels vs yesterday" if changes["injection_change"] is not None else None)
+# In this field, total water injection is balanced to total produced water (BWPD).
+c2.metric("Total Injection", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c3.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c4.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
 
@@ -76,7 +77,7 @@ else:
     trend_agg["water_cut_pct"] = (trend_agg["WATER"] / denominator * 100).round(1).fillna(0.0)
     t1, t2, t3, t4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
     with t1: st.plotly_chart(make_trend_fig(trend_agg, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,8,0.2)", "BFPD"), use_container_width=True)
+    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
     with t3: st.plotly_chart(make_trend_fig(trend_agg, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
     with t4: st.plotly_chart(make_water_cut_trend_fig(trend_agg), use_container_width=True)
 
@@ -114,7 +115,7 @@ with detail_col:
         with w1: st.plotly_chart(make_well_history_fig(well_history, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
         with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
         with w3: st.plotly_chart(make_well_history_fig(well_history, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
-        with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#ef4444", "rgba(239,68,68,0.15)", "Water Cut (%)"), use_container_width=True)
+        with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)"), use_container_width=True)
 
 st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
