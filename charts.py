@@ -41,12 +41,12 @@ def make_injection_trend_fig(inj_by_date):
 def make_top_wells_bar(filtered_df):
     top_wells = filtered_df.sort_values("OIL", ascending=False).head(8)
     fig = px.bar(top_wells, x="ALIAS", y="OIL", color_discrete_sequence=["#38bdf8"])
-    apply_dark_layout(fig, 300); fig.update_layout(xaxis_title=None, yaxis_title="BOPD"); return fig
+    apply_dark_layout(fig, 390); fig.update_layout(xaxis_title=None, yaxis_title="BOPD"); return fig
 
 
 def make_well_history_fig(well_history, y_col, line_color, fill_color, y_title):
     # Match the corresponding Total Production Trend colors, and keep all Well Decline Trend series clean.
-    trend_colors = {"OIL": ("#22c55e", "rgba(34,197,94,0.2)"), "bfpd": ("#eab308", "rgba(234,179,9,0.2)"), "WATER": ("#38bdf8", "rgba(56,189,248,0.2)"), "water_cut_pct": ("#38bdf8", "rgba(56,189,248,0.15)")}
+    trend_colors = {"OIL": ("#22c55e", "rgba(34,197,94,0.2)"), "bfpd": ("#eab308", "rgba(234,179,9,0.2)"), "WATER": ("#38bdf8", "rgba(56,189,248,0.2)"), "water_cut_pct": ("#38bdf8", "rgba(56,189,248,0.15)"), "GAS": ("#f97316", "rgba(249,115,22,0.2)")}
     line_color, fill_color = trend_colors.get(y_col, (line_color, fill_color))
     fig = go.Figure(); fig.add_trace(go.Scatter(x=well_history["date"], y=well_history[y_col], mode="lines", fill="tozeroy", line=dict(color=line_color, width=2), fillcolor=fill_color))
     apply_dark_layout(fig, 300); fig.update_layout(xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
