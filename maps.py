@@ -29,7 +29,16 @@ def make_well_map(filtered_df):
         height=420,
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="#0b1220",
-        legend=dict(bgcolor="rgba(20,29,46,0.8)", font=dict(color="#e2e8f0")),
+        legend=dict(
+            x=0.01,
+            y=0.99,
+            xanchor="left",
+            yanchor="top",
+            bgcolor="rgba(20,29,46,0.82)",
+            bordercolor="rgba(148,163,184,0.45)",
+            borderwidth=1,
+            font=dict(color="#e2e8f0", size=11),
+        ),
         map=dict(
             style="white-bg",
             layers=[
