@@ -86,7 +86,7 @@ def make_water_cut_trend_fig(trend_agg):
         "#38bdf8",
         "rgba(56,189,248,0.15)",
         "Water Cut (%)",
-        markers=True,
+        markers=False,
     )
     fig.update_layout(yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100]))
     return fig
@@ -124,7 +124,7 @@ def make_well_history_fig(well_history, y_col, line_color, fill_color, y_title):
         go.Scatter(
             x=well_history["date"],
             y=well_history[y_col],
-            mode="lines+markers",
+            mode="lines" if y_col == "water_cut_pct" else "lines+markers",
             fill="tozeroy",
             line=dict(color=line_color, width=2),
             fillcolor=fill_color,
