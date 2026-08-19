@@ -85,12 +85,9 @@ else:
 
 st.subheader("Injection Rate Trend")
 if not trend_df.empty:
-    inj_by_date = pd.concat([
-        trend_df[["date", "injection_rate"]].assign(status="Injector"),
-        trend_df[["date", "water_source_rate"]].assign(status="Water Source").rename(columns={"water_source_rate": "injection_rate"})
-    ], ignore_index=True)
+    inj_by_date = trend_df[["date", "injection_rate"]].assign(status="Injector")
     inj_by_date = inj_by_date[inj_by_date["injection_rate"] > 0]
-    if inj_by_date.empty: st.caption("No Injector or Water Source wells found in data yet.")
+    if inj_by_date.empty: st.caption("No injection data found yet.")
     else: st.plotly_chart(make_injection_trend_fig(inj_by_date), use_container_width=True)
 else:
     st.caption("No history yet - upload data to see the trend.")
