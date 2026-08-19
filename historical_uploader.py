@@ -4,7 +4,7 @@ from historical_etl import process_wds_files, to_excel_bytes, upload_wds_product
 
 
 def render_wds_uploader():
-    with st.expander("📚 Historical WDS Excel ETL", expanded=False):
+    with st.expander("📚 Drag and Drop Excel WDS", expanded=False):
         st.caption("Drop multiple daily WDS reports here. The ETL extracts Date, Well, BO and BW, converts names such as M # 01 → M-01, and can upload the cleaned result to Supabase.")
         files = st.file_uploader(
             "Drop hundreds of WDS Excel reports here",
