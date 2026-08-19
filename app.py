@@ -76,12 +76,12 @@ else:
     trend_agg["bfpd"] = trend_agg["OIL"] + trend_agg["WATER"]
     denominator = trend_agg["bfpd"].where(trend_agg["bfpd"].ne(0))
     trend_agg["water_cut_pct"] = (trend_agg["WATER"] / denominator * 100).round(1).fillna(0.0)
-    t1, t2, t3, t4, t5 = st.tabs(["BOPD", "BFPD", "BWPD", "Gas (MCF)", "Water Cut %"])
+    t1, t2, t3, t4, t5 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %", "Gas (MCF)"])
     with t1: st.plotly_chart(make_trend_fig(trend_agg, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
     with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
     with t3: st.plotly_chart(make_trend_fig(trend_agg, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
-    with t4: st.plotly_chart(make_trend_fig(trend_agg, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
-    with t5: st.plotly_chart(make_water_cut_trend_fig(trend_agg), use_container_width=True)
+    with t4: st.plotly_chart(make_water_cut_trend_fig(trend_agg), use_container_width=True)
+    with t5: st.plotly_chart(make_trend_fig(trend_agg, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
 
 st.subheader("Injection Rate Trend")
 if not trend_df.empty:
