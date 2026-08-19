@@ -102,23 +102,44 @@ with top_col:
 with detail_col:
     st.subheader("Well Decline Trend")
     options = filtered["ALIAS"].tolist()
-    selected_well = None
-    if options:
-        top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
-        selected_well = st.selectbox("Select a well", options, index=options.index(top_well))
-    else:
+    metric_options = {
+        "BOPD": ("OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"),
+        "BFPD": ("bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"),
+        "BWPD": ("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"),
+        "Water Cut %": ("water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)"),
+        "Gas (MCF)": ("GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"),
+    }
+
+    if not options:
         st.caption("No wells to display for this filter.")
-    well_history = read_well_history(selected_well) if selected_well else pd.DataFrame()
-    if well_history.empty and selected_well:
-        st.caption(f"No history yet for {selected_well}.")
-    elif not well_history.empty:
-        well_history = well_history.sort_values("date")
-        w1, w2, w3, w4, w5 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %", "Gas (MCF)"])
-        with w1: st.plotly_chart(make_well_history_fig(well_history, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-        with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
-        with w3: st.plotly_chart(make_well_history_fig(well_history, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
-        with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)"), use_container_width=True)
-        with w5: st.plotly_chart(make_well_history_fig(well_history, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
+    else:
+        top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
+        if st.session_state.get("well_decline_selected_well") not in options:
+            st.session_state["well_decline_selected_well"] = top_well
+        if st.session_state.get("well_decline_metric") not in metric_options:
+            st.session_state["well_decline_metric"] = "BOPD"
+
+        selected_well = st.session_state["well_decline_selected_well"]
+        selected_metric = st.session_state["well_decline_metric"]
+        well_history = read_well_history(selected_well)
+
+        if well_history.empty:
+            st.caption(f"No history yet for {selected_well}.")
+        else:
+            y_col, line_color, fill_color, y_title = metric_options[selected_metric]
+            st.plotly_chart(
+                make_well_history_fig(well_history.sort_values("date"), y_col, line_color, fill_color, y_title),
+                use_container_width=True,
+            )
+
+        st.selectbox("Select a well", options, key="well_decline_selected_well")
+        st.radio(
+            "Well decline metric",
+            list(metric_options),
+            key="well_decline_metric",
+            horizontal=True,
+            label_visibility="collapsed",
+        )
 
 st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
