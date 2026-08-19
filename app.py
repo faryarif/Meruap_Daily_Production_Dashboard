@@ -113,11 +113,12 @@ with detail_col:
         st.caption(f"No history yet for {selected_well}.")
     elif not well_history.empty:
         well_history = well_history.sort_values("date")
-        w1, w2, w3, w4 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %"])
+        w1, w2, w3, w4, w5 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %", "Gas (MCF)"])
         with w1: st.plotly_chart(make_well_history_fig(well_history, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
         with w2: st.plotly_chart(make_well_history_fig(well_history, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
         with w3: st.plotly_chart(make_well_history_fig(well_history, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
         with w4: st.plotly_chart(make_well_history_fig(well_history, "water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)"), use_container_width=True)
+        with w5: st.plotly_chart(make_well_history_fig(well_history, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
 
 st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
