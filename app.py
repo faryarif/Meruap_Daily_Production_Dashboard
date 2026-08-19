@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from charts import make_field_totals_bar, make_injection_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
-from database import read_daily_trend, read_snapshot, read_locations, read_well_history
+from database import read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import filter_by_field, field_options, missing_coordinate_aliases
 from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
@@ -44,6 +44,7 @@ render_wds_uploader()
 
 display_wells = wells_df if selected_date_str == dates[0] else read_snapshot(selected_date_str)
 filtered = filter_by_field(display_wells, field_filter)
+all_layer_wells = filter_by_field(read_all_layer_snapshot(selected_date_str), field_filter)
 kpis = calculate_kpis(filtered)
 changes = calculate_daily_changes(trend_df, selected_date)
 missing_aliases = missing_coordinate_aliases(display_wells)
@@ -61,11 +62,11 @@ c5.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{chang
 pie_col, map_col = st.columns([1, 1.3])
 with pie_col:
     st.subheader("Status & Field Totals")
-    st.plotly_chart(make_status_pie(filtered), use_container_width=True)
-    st.plotly_chart(make_field_totals_bar(display_wells), use_container_width=True)
+    st.plotly_chart(make_status_pie(all_layer_wells), use_container_width=True)
+    st.plotly_chart(make_field_totals_bar(all_layer_wells), use_container_width=True)
 with map_col:
     st.subheader("Well Map")
-    st.plotly_chart(make_well_map(filtered), use_container_width=True)
+    st.plotly_chart(make_well_map(all_layer_wells), use_container_width=True)
 
 st.subheader("Total Production Trend")
 if trend_df.empty:
