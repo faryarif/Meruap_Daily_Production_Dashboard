@@ -60,6 +60,12 @@ def read_snapshot(date_str=None):
     return _normalize_production(_rpc_df("dashboard_snapshot", params))
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def read_all_layer_snapshot(date_str=None):
+    params = {"p_date": date_str} if date_str else {}
+    return _normalize_production(_rpc_df("dashboard_all_layer_snapshot", params))
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def read_daily_trend(start_date=None, end_date=None):
     params = {}
