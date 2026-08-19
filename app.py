@@ -40,7 +40,6 @@ with col_date:
 with col_filter:
     field_filter = st.selectbox("Field", field_options(wells_df))
 
-# Historical WDS batch ETL — the only production-data upload workflow.
 render_wds_uploader()
 
 display_wells = wells_df if selected_date_str == dates[0] else read_snapshot(selected_date_str)
@@ -51,12 +50,13 @@ missing_aliases = missing_coordinate_aliases(display_wells)
 if missing_aliases:
     st.warning("These wells have no saved coordinates: " + ", ".join(missing_aliases) + ". Add them to the 'HeaderID' table in Supabase.")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Total Production", f"{kpis['total_bopd']:,} BOPD", f"{changes['bopd_change']:+,} BOPD vs yesterday" if changes["bopd_change"] is not None else None)
-# In this field, total water injection is balanced to total produced water (BWPD).
 c2.metric("Total Injection", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c3.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c4.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
+gas_delta = f"{changes['gas_change']:+,.1f} MCF vs yesterday" if changes["gas_change"] is not None else None
+c5.metric("Total Gas Produced", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
 
 pie_col, map_col = st.columns([1, 1.3])
 with pie_col:
