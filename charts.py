@@ -34,7 +34,7 @@ def make_water_cut_trend_fig(trend_agg):
 
 
 def make_injection_trend_fig(inj_by_date):
-    fig = px.line(inj_by_date, x="date", y="injection_rate", color="status", color_discrete_map={"Injector": "#f59e0b", "Water Source": "#a855f7"}, markers=False)
+    fig = px.line(inj_by_date, x="date", y="injection_rate", color="status", color_discrete_map={"Injector": "#a855f7"}, markers=False)
     apply_dark_layout(fig, 280); fig.update_layout(xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title="Injection Rate"), legend=dict(font=dict(color="#e2e8f0"), orientation="h")); return fig
 
 
