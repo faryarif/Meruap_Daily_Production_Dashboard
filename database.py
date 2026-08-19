@@ -25,6 +25,7 @@ def _normalize_production(df):
 
     df = df.rename(columns={
         "oil": "OIL",
+        "gas": "GAS",
         "water": "WATER",
         "bfpd": "bfpd",
         "injection_rate": "injection_rate",
