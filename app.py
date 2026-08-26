@@ -7,7 +7,7 @@ from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import filter_by_field, field_options, missing_coordinate_aliases
 from maps import make_well_map
-from metrics import calculate_daily_changes, calculate_kpis
+from metrics import calculate_daily_changes, calculate_kpis, calculate_well_alerts
 from styles import inject_styles
 from historical_uploader import render_wds_uploader
 
@@ -45,6 +45,9 @@ render_wds_uploader()
 display_wells = wells_df if selected_date_str == dates[0] else read_snapshot(selected_date_str)
 filtered = filter_by_field(display_wells, field_filter)
 all_layer_wells = filter_by_field(read_all_layer_snapshot(selected_date_str), field_filter)
+previous_date_str = (pd.Timestamp(selected_date) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+previous_all_layer_wells = filter_by_field(read_all_layer_snapshot(previous_date_str), field_filter)
+well_alerts = calculate_well_alerts(all_layer_wells, previous_all_layer_wells)
 kpis = calculate_kpis(filtered)
 changes = calculate_daily_changes(trend_df, selected_date)
 missing_aliases = missing_coordinate_aliases(display_wells)
@@ -58,6 +61,22 @@ c2.metric("Total Gas Production", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
 c3.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c4.metric("Total Water Injection", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c5.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
+
+st.subheader("Well Alerts")
+if well_alerts.empty:
+    st.success("No well alerts for the selected date and field.")
+else:
+    st.dataframe(
+        well_alerts,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Oil": st.column_config.NumberColumn("Oil (BOPD)", format="%.1f"),
+            "Gas": st.column_config.NumberColumn("Gas (MCF)", format="%.1f"),
+            "Water": st.column_config.NumberColumn("Water (BWPD)", format="%.1f"),
+            "Oil Change": st.column_config.NumberColumn("Oil Change vs Yesterday", format="%+.1f"),
+        },
+    )
 
 pie_col, map_col = st.columns([1, 1.3])
 with pie_col:
