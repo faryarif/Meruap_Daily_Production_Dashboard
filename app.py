@@ -33,6 +33,7 @@ def calculate_well_alerts(current_df, previous_df):
         water = float(row["WATER"] or 0)
         water_cut = float(row["water_cut_pct"] or 0)
         prior_oil = float(previous.at[alias, "OIL"] or 0) if alias in previous.index else None
+        prior_water_cut = float(previous.at[alias, "water_cut_pct"] or 0) if alias in previous.index else None
         oil_change = oil - prior_oil if prior_oil is not None else None
         base = {
             "Well": alias,
@@ -48,8 +49,8 @@ def calculate_well_alerts(current_df, previous_df):
         elif prior_oil is not None and prior_oil > 0 and (oil_change / prior_oil) <= -0.30:
             alerts.append({"Severity": "Critical", "Alert": "Oil dropped 30% or more", **base})
 
-        if water_cut > 80:
-            alerts.append({"Severity": "Warning", "Alert": "Water cut above 80%", **base})
+        if prior_water_cut is not None and (water_cut - prior_water_cut) > 1:
+            alerts.append({"Severity": "Warning", "Alert": "Water cut increased by more than 1%", **base})
 
     for alias, row in previous.loc[~previous.index.isin(current.index)].iterrows():
         if float(row["OIL"] or 0) > 0:
