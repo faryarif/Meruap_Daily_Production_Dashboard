@@ -73,15 +73,30 @@ if trend_df.empty:
     st.caption("No history yet - upload data to see the trend.")
 else:
     trend_agg = trend_df.copy()
-    trend_agg["bfpd"] = trend_agg["OIL"] + trend_agg["WATER"]
-    denominator = trend_agg["bfpd"].where(trend_agg["bfpd"].ne(0))
-    trend_agg["water_cut_pct"] = (trend_agg["WATER"] / denominator * 100).round(1).fillna(0.0)
+    trend_agg["date"] = pd.to_datetime(trend_agg["date"])
+    period = st.selectbox(
+        "View period",
+        ["Year to Date", "1 Year", "3 Years", "5 Years", "10 Years", "All Time"],
+        key="total_production_trend_period",
+    )
+    latest_date = trend_agg["date"].max()
+    if period == "Year to Date":
+        start_date = latest_date.replace(month=1, day=1)
+    elif period == "All Time":
+        start_date = trend_agg["date"].min()
+    else:
+        start_date = latest_date - pd.DateOffset(years=int(period.split()[0]))
+    trend_view = trend_agg[trend_agg["date"] >= start_date].copy()
+
+    trend_view["bfpd"] = trend_view["OIL"] + trend_view["WATER"]
+    denominator = trend_view["bfpd"].where(trend_view["bfpd"].ne(0))
+    trend_view["water_cut_pct"] = (trend_view["WATER"] / denominator * 100).round(1).fillna(0.0)
     t1, t2, t3, t4, t5 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %", "Gas (MCF)"])
-    with t1: st.plotly_chart(make_trend_fig(trend_agg, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-    with t2: st.plotly_chart(make_trend_fig(trend_agg, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
-    with t3: st.plotly_chart(make_trend_fig(trend_agg, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
-    with t4: st.plotly_chart(make_water_cut_trend_fig(trend_agg), use_container_width=True)
-    with t5: st.plotly_chart(make_trend_fig(trend_agg, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
+    with t1: st.plotly_chart(make_trend_fig(trend_view, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
+    with t2: st.plotly_chart(make_trend_fig(trend_view, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
+    with t3: st.plotly_chart(make_trend_fig(trend_view, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
+    with t4: st.plotly_chart(make_water_cut_trend_fig(trend_view), use_container_width=True)
+    with t5: st.plotly_chart(make_trend_fig(trend_view, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
 
 st.subheader("Injection Rate Trend")
 if not trend_df.empty:
