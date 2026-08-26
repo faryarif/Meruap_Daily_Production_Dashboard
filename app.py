@@ -7,9 +7,73 @@ from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import filter_by_field, field_options, missing_coordinate_aliases
 from maps import make_well_map
-from metrics import calculate_daily_changes, calculate_kpis, calculate_well_alerts
+from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
 from historical_uploader import render_wds_uploader
+
+
+def calculate_well_alerts(current_df, previous_df):
+    """Return actionable per-well alerts for the selected snapshot."""
+    columns = ["Severity", "Alert", "Well", "Field", "Oil", "Gas", "Water", "Oil Change"]
+    current = current_df.copy() if current_df is not None else pd.DataFrame()
+    previous = previous_df.copy() if previous_df is not None else pd.DataFrame()
+
+    for df in (current, previous):
+        for column in ["ALIAS", "field", "OIL", "GAS", "WATER", "water_cut_pct"]:
+            if column not in df.columns:
+                df[column] = 0 if column not in ["ALIAS", "field"] else ""
+
+    current = current.drop_duplicates(subset=["ALIAS"]).set_index("ALIAS", drop=False)
+    previous = previous.drop_duplicates(subset=["ALIAS"]).set_index("ALIAS", drop=False)
+    alerts = []
+
+    for alias, row in current.iterrows():
+        oil = float(row["OIL"] or 0)
+        gas = float(row["GAS"] or 0)
+        water = float(row["WATER"] or 0)
+        water_cut = float(row["water_cut_pct"] or 0)
+        prior_oil = float(previous.at[alias, "OIL"] or 0) if alias in previous.index else None
+        oil_change = oil - prior_oil if prior_oil is not None else None
+        base = {
+            "Well": alias,
+            "Field": row["field"],
+            "Oil": round(oil, 1),
+            "Gas": round(gas, 1),
+            "Water": round(water, 1),
+            "Oil Change": round(oil_change, 1) if oil_change is not None else None,
+        }
+
+        if prior_oil is not None and prior_oil > 0 and oil == 0:
+            alerts.append({"Severity": "Warning", "Alert": "Zero oil production", **base})
+        elif prior_oil is not None and prior_oil > 0 and (oil_change / prior_oil) <= -0.30:
+            alerts.append({"Severity": "Critical", "Alert": "Oil dropped 30% or more", **base})
+
+        if water_cut > 80:
+            alerts.append({"Severity": "Warning", "Alert": "Water cut above 80%", **base})
+
+    for alias, row in previous.loc[~previous.index.isin(current.index)].iterrows():
+        if float(row["OIL"] or 0) > 0:
+            alerts.append({
+                "Severity": "Watch",
+                "Alert": "Missing from selected upload",
+                "Well": alias,
+                "Field": row["field"],
+                "Oil": None,
+                "Gas": None,
+                "Water": None,
+                "Oil Change": None,
+            })
+
+    if not alerts:
+        return pd.DataFrame(columns=columns)
+    severity_order = {"Critical": 0, "Warning": 1, "Watch": 2}
+    return (
+        pd.DataFrame(alerts)[columns]
+        .assign(_order=lambda df: df["Severity"].map(severity_order))
+        .sort_values(["_order", "Well", "Alert"])
+        .drop(columns="_order")
+        .reset_index(drop=True)
+    )
 
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
 inject_styles(st)
