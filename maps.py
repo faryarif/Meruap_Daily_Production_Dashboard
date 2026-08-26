@@ -9,9 +9,9 @@ def make_well_map(filtered_df):
     oil = pd.to_numeric(mappable["OIL"], errors="coerce").fillna(0).clip(lower=0)
     if not mappable.empty and oil.max() > 0:
         # Keep every well visible while making higher oil production clearly larger.
-        mappable["marker_size"] = 10 + (oil / oil.max() * 45)
+        mappable["marker_size"] = 4 + (oil / oil.max() * 51)
     else:
-        mappable["marker_size"] = 10
+        mappable["marker_size"] = 4
 
     fig = px.scatter_map(
         mappable,
