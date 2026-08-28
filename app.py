@@ -109,6 +109,8 @@ render_wds_uploader()
 
 display_wells = wells_df if selected_date_str == dates[0] else read_snapshot(selected_date_str)
 filtered = filter_by_field(display_wells, field_filter)
+reported_totals = pd.to_numeric(display_wells.get("reported_total"), errors="coerce").dropna()
+reported_total = float(reported_totals.iloc[0]) if not reported_totals.empty else None
 all_layer_wells = filter_by_field(read_all_layer_snapshot(selected_date_str), field_filter)
 previous_date_str = (pd.Timestamp(selected_date) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 previous_all_layer_wells = filter_by_field(read_all_layer_snapshot(previous_date_str), field_filter)
@@ -119,13 +121,14 @@ missing_aliases = missing_coordinate_aliases(display_wells)
 if missing_aliases:
     st.warning("These wells have no saved coordinates: " + ", ".join(missing_aliases) + ". Add them to the 'HeaderID' table in Supabase.")
 
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Total Oil Production", f"{kpis['total_bopd']:,} BOPD", f"{changes['bopd_change']:+,} BOPD vs yesterday" if changes["bopd_change"] is not None else None)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+c1.metric("Total Production", f"{reported_total:,.0f} BOPD" if reported_total is not None else "Not uploaded")
+c2.metric("Total Oil Production", f"{kpis['total_bopd']:,} BOPD", f"{changes['bopd_change']:+,} BOPD vs yesterday" if changes["bopd_change"] is not None else None)
 gas_delta = f"{changes['gas_change']:+,.1f} MCF vs yesterday" if changes["gas_change"] is not None else None
-c2.metric("Total Gas Production", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
-c3.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
-c4.metric("Total Water Injection", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
-c5.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
+c3.metric("Total Gas Production", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
+c4.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
+c5.metric("Total Water Injection", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
+c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
 
 st.subheader("Well Alerts")
 if well_alerts.empty:
