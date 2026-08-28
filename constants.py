@@ -9,7 +9,7 @@ STATUS_COLORS = {
     "Unknown": "#94a3b8",
 }
 
-DATA_PROD_COLS = ["date", "ALIAS", "OIL", "GAS", "WATER", "injection_rate"]
+DATA_PROD_COLS = ["date", "ALIAS", "OIL", "GAS", "WATER", "injection_rate", "reported_total"]
 LOCATION_HEAD_COLS = ["ALIAS", "field", "status", "latitude", "longitude"]
 NUMERIC_PROD_COLS = ["OIL", "GAS", "WATER", "injection_rate"]
 COORDINATE_COLS = ["latitude", "longitude"]
