@@ -196,12 +196,30 @@ else:
 
 st.subheader("Injection Rate Trend")
 if not trend_df.empty:
+    injection_period = st.selectbox(
+        "View period",
+        ["Year to Date", "1 Year", "3 Years", "5 Years", "10 Years", "All Time"],
+        key="injection_rate_trend_period",
+    )
     inj_by_date = pd.concat([
         trend_df[["date", "injection_rate"]].assign(status="Injector"),
         trend_df[["date", "water_source_rate"]].assign(status="Water Source").rename(columns={"water_source_rate": "injection_rate"})
     ], ignore_index=True)
-    inj_by_date = inj_by_date[inj_by_date["injection_rate"] > 0]
-    if inj_by_date.empty: st.caption("No Injector or Water Source wells found in data yet.")
+    inj_by_date["date"] = pd.to_datetime(inj_by_date["date"])
+    latest_injection_date = inj_by_date["date"].max()
+    if injection_period == "Year to Date":
+        injection_start_date = latest_injection_date.replace(month=1, day=1)
+    elif injection_period == "All Time":
+        injection_start_date = inj_by_date["date"].min()
+    else:
+        injection_start_date = latest_injection_date - pd.DateOffset(
+            years=int(injection_period.split()[0])
+        )
+    inj_by_date = inj_by_date[
+        (inj_by_date["date"] >= injection_start_date)
+        & (inj_by_date["injection_rate"] > 0)
+    ].copy()
+    if inj_by_date.empty: st.caption("No Injector or Water Source wells found for the selected period.")
     else: st.plotly_chart(make_injection_trend_fig(inj_by_date), use_container_width=True)
 else:
     st.caption("No history yet - upload data to see the trend.")
