@@ -79,6 +79,23 @@ def _find_header_row(raw_df):
     return None
 
 
+def _find_stacked_header_column(raw_df, header_row, *names, depth=3):
+    """Find a column whose WDS header is split vertically across several rows."""
+    wanted = {_normalise_column_name(name) for name in names}
+    last_header_row = min(header_row + depth, len(raw_df))
+    for column_position in range(raw_df.shape[1]):
+        parts = []
+        for row_position in range(header_row, last_header_row):
+            value = raw_df.iat[row_position, column_position]
+            if not pd.isna(value):
+                part = _normalise_column_name(value)
+                if part and (not parts or parts[-1] != part):
+                    parts.append(part)
+        if " ".join(parts) in wanted:
+            return column_position
+    return None
+
+
 def _read_reported_total(raw_bytes):
     workbook = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
     try:
@@ -125,6 +142,17 @@ def extract_wds_file(uploaded_file):
         "total injection bbls",
         "injeksi bbls",
     )
+    if injection_col is None:
+        injection_position = _find_stacked_header_column(
+            raw,
+            header_row,
+            "total injeksi bbls",
+            "total injeksi (bbls)",
+            "total injection bbls",
+            "injeksi bbls",
+        )
+        if injection_position is not None:
+            injection_col = table.columns[injection_position]
 
     if not all([well_col, oil_col, water_col]):
         raise ValueError("Required columns Well, BO and BW were not found.")
