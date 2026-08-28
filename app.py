@@ -2,7 +2,7 @@
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-from charts import make_field_totals_bar, make_injection_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
+from charts import make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import filter_by_field, field_options, missing_coordinate_aliases
@@ -187,12 +187,21 @@ else:
     trend_view["bfpd"] = trend_view["OIL"] + trend_view["WATER"]
     denominator = trend_view["bfpd"].where(trend_view["bfpd"].ne(0))
     trend_view["water_cut_pct"] = (trend_view["WATER"] / denominator * 100).round(1).fillna(0.0)
-    t1, t2, t3, t4, t5 = st.tabs(["BOPD", "BFPD", "BWPD", "Water Cut %", "Gas (MCF)"])
-    with t1: st.plotly_chart(make_trend_fig(trend_view, "OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"), use_container_width=True)
-    with t2: st.plotly_chart(make_trend_fig(trend_view, "bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"), use_container_width=True)
-    with t3: st.plotly_chart(make_trend_fig(trend_view, "WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"), use_container_width=True)
-    with t4: st.plotly_chart(make_water_cut_trend_fig(trend_view), use_container_width=True)
-    with t5: st.plotly_chart(make_trend_fig(trend_view, "GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"), use_container_width=True)
+    st.plotly_chart(make_production_trend_fig(trend_view), use_container_width=True)
+    water_cut_tab, gas_tab = st.tabs(["Water Cut %", "Gas (MCF)"])
+    with water_cut_tab:
+        st.plotly_chart(make_water_cut_trend_fig(trend_view), use_container_width=True)
+    with gas_tab:
+        st.plotly_chart(
+            make_trend_fig(
+                trend_view,
+                "GAS",
+                "#f97316",
+                "rgba(249,115,22,0.2)",
+                "MCF",
+            ),
+            use_container_width=True,
+        )
 
 st.subheader("Injection Rate Trend")
 if not trend_df.empty:
