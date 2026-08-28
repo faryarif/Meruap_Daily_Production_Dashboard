@@ -122,7 +122,16 @@ if missing_aliases:
     st.warning("These wells have no saved coordinates: " + ", ".join(missing_aliases) + ". Add them to the 'HeaderID' table in Supabase.")
 
 c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("Total Production", f"{reported_total:,.0f} BOPD" if reported_total is not None else "Not uploaded")
+reported_total_delta = (
+    f"{changes['reported_total_change']:+,.0f} BOPD vs yesterday"
+    if changes["reported_total_change"] is not None
+    else None
+)
+c1.metric(
+    "Total Production",
+    f"{reported_total:,.0f} BOPD" if reported_total is not None else "Not uploaded",
+    reported_total_delta,
+)
 c2.metric("Total Oil Production", f"{kpis['total_bopd']:,} BOPD", f"{changes['bopd_change']:+,} BOPD vs yesterday" if changes["bopd_change"] is not None else None)
 gas_delta = f"{changes['gas_change']:+,.1f} MCF vs yesterday" if changes["gas_change"] is not None else None
 c3.metric("Total Gas Production", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
