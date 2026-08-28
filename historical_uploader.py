@@ -19,7 +19,6 @@ def render_wds_uploader():
         with st.spinner("Extracting WDS reports..."):
             result, errors = process_wds_files(files)
 
-        injection_values = st.session_state.get("_unused_injection_values")
         injection_values = result["injection_rate"].fillna(0) if "injection_rate" in result.columns else None
         injection_total = float(injection_values.sum()) if injection_values is not None else 0.0
         active_injectors = int((injection_values > 0).sum()) if injection_values is not None else 0
