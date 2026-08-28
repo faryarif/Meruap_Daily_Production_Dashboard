@@ -28,6 +28,31 @@ def make_trend_fig(trend_agg, y_col, line_color, fill_color, y_title, markers=Fa
     apply_dark_layout(fig, 280); fig.update_layout(xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title)); return fig
 
 
+def make_production_trend_fig(trend_agg):
+    fig = go.Figure()
+    for column, label, color in [
+        ("OIL", "BOPD", "#22c55e"),
+        ("bfpd", "BFPD", "#eab308"),
+        ("WATER", "BWPD", "#38bdf8"),
+    ]:
+        fig.add_trace(go.Scatter(
+            x=trend_agg["date"],
+            y=trend_agg[column],
+            name=label,
+            mode="lines",
+            line=dict(color=color, width=2),
+            hovertemplate=f"%{{x|%d %b %Y}}<br>{label}: %{{y:,.1f}}<extra></extra>",
+        ))
+    apply_dark_layout(fig, 280)
+    fig.update_layout(
+        xaxis=dict(gridcolor="#263144"),
+        yaxis=dict(gridcolor="#263144", title="Production Rate"),
+        legend=dict(font=dict(color="#e2e8f0"), orientation="h"),
+        hovermode="x unified",
+    )
+    return fig
+
+
 def make_water_cut_trend_fig(trend_agg):
     fig = make_trend_fig(trend_agg, "water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)", markers=False)
     fig.update_layout(yaxis=dict(gridcolor="#263144", title="Water Cut (%)", range=[0, 100])); return fig
