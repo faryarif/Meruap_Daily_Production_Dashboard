@@ -36,6 +36,10 @@ def _normalize_production(df):
             df[col] = 0
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
+    if "reported_total" not in df.columns:
+        df["reported_total"] = pd.NA
+    df["reported_total"] = pd.to_numeric(df["reported_total"], errors="coerce")
+
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.strftime("%Y-%m-%d")
 
