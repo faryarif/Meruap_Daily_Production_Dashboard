@@ -23,6 +23,7 @@ def calculate_daily_changes(trend_df, selected_date=None):
         "water_prod_change": None,
         "water_source_change": None,
         "gas_change": None,
+        "reported_total_change": None,
     }
     if trend_df is None or trend_df.empty or "date" not in trend_df.columns:
         return changes
@@ -45,6 +46,10 @@ def calculate_daily_changes(trend_df, selected_date=None):
     changes["water_prod_change"] = int(curr.get("WATER", 0)) - int(prev.get("WATER", 0))
     changes["water_source_change"] = int(curr.get("water_source_rate", 0)) - int(prev.get("water_source_rate", 0))
     changes["gas_change"] = float(curr.get("GAS", 0) or 0) - float(prev.get("GAS", 0) or 0)
+    current_reported = curr.get("reported_total")
+    previous_reported = prev.get("reported_total")
+    if pd.notna(current_reported) and pd.notna(previous_reported):
+        changes["reported_total_change"] = float(current_reported) - float(previous_reported)
     return changes
 
 
