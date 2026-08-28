@@ -5,7 +5,7 @@ from historical_etl import process_wds_files, to_excel_bytes, upload_wds_product
 
 def render_wds_uploader():
     with st.expander("📚 Drag and Drop Excel WDS", expanded=False):
-        st.caption("Drop multiple daily WDS reports here. The ETL extracts Date, Well, BO, BW, Gas, and the daily Total Production from cell AH24, converts names such as M # 01 → M-01, and can upload the cleaned result to Supabase.")
+        st.caption("Drop multiple daily WDS reports here. The ETL extracts Date, Well, BO, BW, Gas, and the daily Total Production from cell AH2, converts names such as M # 01 → M-01, and can upload the cleaned result to Supabase.")
         files = st.file_uploader(
             "Drop hundreds of WDS Excel reports here",
             type=["xlsx", "xls"],
@@ -51,7 +51,7 @@ def render_wds_uploader():
                 with st.spinner("Uploading extracted WDS production..."):
                     rows = upload_wds_production(output)
                 st.cache_data.clear()
-                st.success(f"Successfully uploaded {rows:,} date + well records and saved the AH24 daily totals. Existing injection_rate values were not overwritten.")
+                st.success(f"Successfully uploaded {rows:,} date + well records and saved the AH2 daily totals. Existing injection_rate values were not overwritten.")
                 st.rerun()
             except Exception as exc:
                 st.error(f"WDS upload failed: {exc}")
