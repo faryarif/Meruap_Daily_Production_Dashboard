@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
+from openpyxl import load_workbook
 from supabase import create_client
 
 
@@ -74,8 +75,24 @@ def _find_header_row(raw_df):
     return None
 
 
+def _read_reported_total(raw_bytes):
+    workbook = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+    try:
+        value = workbook[workbook.sheetnames[0]]["AH24"].value
+    finally:
+        workbook.close()
+
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+    total = pd.to_numeric(value, errors="coerce")
+    if pd.isna(total):
+        raise ValueError("Could not read the daily Total Production value from cell AH24.")
+    return float(total)
+
+
 def extract_wds_file(uploaded_file):
     raw_bytes = uploaded_file.getvalue()
+    reported_total = _read_reported_total(raw_bytes)
     raw = pd.read_excel(io.BytesIO(raw_bytes), header=None, engine="openpyxl")
     report_date = _find_date(raw, getattr(uploaded_file, "name", ""))
     header_row = _find_header_row(raw)
@@ -121,7 +138,8 @@ def extract_wds_file(uploaded_file):
 
     out = out[out["ALIAS"].notna() & out["ALIAS"].astype(str).str.strip().ne("")].copy()
     out["date"] = report_date.isoformat()
-    return out[["date", "ALIAS", "OIL", "WATER", "GAS"]].drop_duplicates(["date", "ALIAS"], keep="last")
+    out["reported_total"] = reported_total
+    return out[["date", "ALIAS", "OIL", "WATER", "GAS", "reported_total"]].drop_duplicates(["date", "ALIAS"], keep="last")
 
 
 def process_wds_files(uploaded_files):
@@ -133,7 +151,7 @@ def process_wds_files(uploaded_files):
             frames.append(df)
         except Exception as exc:
             errors.append({"file": file.name, "error": str(exc)})
-    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "GAS", "source_file"])
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "GAS", "reported_total", "source_file"])
     if not result.empty:
         result = result.sort_values(["date", "ALIAS"]).drop_duplicates(["date", "ALIAS"], keep="last").reset_index(drop=True)
     return result, pd.DataFrame(errors, columns=["file", "error"])
@@ -157,7 +175,7 @@ def upload_wds_production(df):
         return 0
 
     client = _admin_client()
-    upload_df = df[["date", "ALIAS", "OIL", "WATER", "GAS"]].copy()
+    upload_df = df[["date", "ALIAS", "OIL", "WATER", "GAS", "reported_total"]].copy()
     upload_df["UNIQUEID"] = upload_df["ALIAS"].astype(str) + ":AllLayer"
     records = upload_df[["UNIQUEID", "date", "ALIAS", "OIL", "WATER", "GAS"]].to_dict(orient="records")
 
@@ -169,4 +187,15 @@ def upload_wds_production(df):
         ).execute()
         if response.data is None:
             raise RuntimeError("Supabase returned no data while uploading WDS production records.")
+
+    daily_totals = upload_df[["date", "reported_total"]].drop_duplicates("date", keep="last")
+    for total in daily_totals.to_dict(orient="records"):
+        response = (
+            client.table("ProdWellBasiss")
+            .update({"reported_total": float(total["reported_total"])})
+            .eq("date", total["date"])
+            .execute()
+        )
+        if response.data is None:
+            raise RuntimeError(f"Supabase returned no data while saving AH24 for {total['date']}.")
     return len(records)
