@@ -197,5 +197,5 @@ def upload_wds_production(df):
             .execute()
         )
         if response.data is None:
-            raise RuntimeError(f"Supabase returned no data while saving AH24 for {total['date']}.")
+            raise RuntimeError(f"Supabase returned no data while saving AH2 for {total['date']}.")
     return len(records)
