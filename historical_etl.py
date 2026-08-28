@@ -78,7 +78,7 @@ def _find_header_row(raw_df):
 def _read_reported_total(raw_bytes):
     workbook = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
     try:
-        value = workbook[workbook.sheetnames[0]]["AH24"].value
+        value = workbook[workbook.sheetnames[0]]["AH2"].value
     finally:
         workbook.close()
 
@@ -86,7 +86,7 @@ def _read_reported_total(raw_bytes):
         value = value.replace(",", "").strip()
     total = pd.to_numeric(value, errors="coerce")
     if pd.isna(total):
-        raise ValueError("Could not read the daily Total Production value from cell AH24.")
+        raise ValueError("Could not read the daily Total Production value from cell AH2.")
     return float(total)
 
 
