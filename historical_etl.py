@@ -67,9 +67,13 @@ def _normalise_well(value):
     return text
 
 
+def _normalise_column_name(value):
+    return re.sub(r"\s+", " ", str(value).strip().lower())
+
+
 def _find_header_row(raw_df):
     for r in range(min(30, len(raw_df))):
-        values = {str(v).strip().lower() for v in raw_df.iloc[r].tolist() if not pd.isna(v)}
+        values = {_normalise_column_name(v) for v in raw_df.iloc[r].tolist() if not pd.isna(v)}
         if "well" in values and ("bo" in values or "oil" in values) and ("bw" in values or "water" in values):
             return r
     return None
@@ -102,18 +106,25 @@ def extract_wds_file(uploaded_file):
         raise ValueError("Could not find Well / BO / BW columns.")
 
     table = pd.read_excel(io.BytesIO(raw_bytes), header=header_row, engine="openpyxl")
-    columns = {str(c).strip().lower(): c for c in table.columns}
+    columns = {_normalise_column_name(c): c for c in table.columns}
 
     def col(*names):
         for name in names:
-            if name.lower() in columns:
-                return columns[name.lower()]
+            normalised = _normalise_column_name(name)
+            if normalised in columns:
+                return columns[normalised]
         return None
 
     well_col = col("well")
     oil_col = col("bo", "oil")
     water_col = col("bw", "water")
     gas_col = col("gas casing mcf", "gas casing", "gas_casing", "gas mcf", "gas")
+    injection_col = col(
+        "total injeksi bbls",
+        "total injeksi (bbls)",
+        "total injection bbls",
+        "injeksi bbls",
+    )
 
     if not all([well_col, oil_col, water_col]):
         raise ValueError("Required columns Well, BO and BW were not found.")
@@ -121,11 +132,15 @@ def extract_wds_file(uploaded_file):
     out_cols = [well_col, oil_col, water_col]
     if gas_col is not None:
         out_cols.append(gas_col)
+    if injection_col is not None:
+        out_cols.append(injection_col)
 
     out = table[out_cols].copy()
     renamed = ["ALIAS", "OIL", "WATER"]
     if gas_col is not None:
         renamed.append("GAS")
+    if injection_col is not None:
+        renamed.append("injection_rate")
     out.columns = renamed
 
     out["ALIAS"] = out["ALIAS"].map(_normalise_well)
@@ -135,11 +150,15 @@ def extract_wds_file(uploaded_file):
         out["GAS"] = pd.to_numeric(out["GAS"], errors="coerce").fillna(0.0)
     else:
         out["GAS"] = 0.0
+    if "injection_rate" in out.columns:
+        out["injection_rate"] = pd.to_numeric(out["injection_rate"], errors="coerce")
+    else:
+        out["injection_rate"] = pd.NA
 
     out = out[out["ALIAS"].notna() & out["ALIAS"].astype(str).str.strip().ne("")].copy()
     out["date"] = report_date.isoformat()
     out["reported_total"] = reported_total
-    return out[["date", "ALIAS", "OIL", "WATER", "GAS", "reported_total"]].drop_duplicates(["date", "ALIAS"], keep="last")
+    return out[["date", "ALIAS", "OIL", "WATER", "GAS", "injection_rate", "reported_total"]].drop_duplicates(["date", "ALIAS"], keep="last")
 
 
 def process_wds_files(uploaded_files):
@@ -151,7 +170,7 @@ def process_wds_files(uploaded_files):
             frames.append(df)
         except Exception as exc:
             errors.append({"file": file.name, "error": str(exc)})
-    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "GAS", "reported_total", "source_file"])
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["date", "ALIAS", "OIL", "WATER", "GAS", "injection_rate", "reported_total", "source_file"])
     if not result.empty:
         result = result.sort_values(["date", "ALIAS"]).drop_duplicates(["date", "ALIAS"], keep="last").reset_index(drop=True)
     return result, pd.DataFrame(errors, columns=["file", "error"])
@@ -170,14 +189,26 @@ def _admin_client():
 
 
 def upload_wds_production(df):
-    """Upsert WDS data while preserving existing injection_rate values."""
+    """Upsert WDS data; blank injection values preserve existing database values."""
     if df.empty:
         return 0
 
     client = _admin_client()
-    upload_df = df[["date", "ALIAS", "OIL", "WATER", "GAS", "reported_total"]].copy()
+    upload_df = df[["date", "ALIAS", "OIL", "WATER", "GAS", "injection_rate", "reported_total"]].copy()
     upload_df["UNIQUEID"] = upload_df["ALIAS"].astype(str) + ":AllLayer"
-    records = upload_df[["UNIQUEID", "date", "ALIAS", "OIL", "WATER", "GAS"]].to_dict(orient="records")
+    records = []
+    for row in upload_df.to_dict(orient="records"):
+        record = {
+            "UNIQUEID": row["UNIQUEID"],
+            "date": row["date"],
+            "ALIAS": row["ALIAS"],
+            "OIL": row["OIL"],
+            "WATER": row["WATER"],
+            "GAS": row["GAS"],
+        }
+        if pd.notna(row["injection_rate"]):
+            record["injection_rate"] = float(row["injection_rate"])
+        records.append(record)
 
     for start in range(0, len(records), 1000):
         response = client.table("ProdWellBasiss").upsert(
