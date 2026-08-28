@@ -136,7 +136,7 @@ c2.metric("Total Oil Production", f"{kpis['total_bopd']:,} BOPD", f"{changes['bo
 gas_delta = f"{changes['gas_change']:+,.1f} MCF vs yesterday" if changes["gas_change"] is not None else None
 c3.metric("Total Gas Production", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
 c4.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
-c5.metric("Total Water Injection", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
+c5.metric("Total Water Injection", f"{kpis['total_injection']:,} BWPD", f"{changes['injection_change']:+,} BWPD vs yesterday" if changes["injection_change"] is not None else None)
 c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
 
 st.subheader("Well Alerts")
