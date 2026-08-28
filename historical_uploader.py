@@ -19,10 +19,18 @@ def render_wds_uploader():
         with st.spinner("Extracting WDS reports..."):
             result, errors = process_wds_files(files)
 
+        injection_values = st.session_state.get("_unused_injection_values")
+        injection_values = result["injection_rate"].fillna(0) if "injection_rate" in result.columns else None
+        injection_total = float(injection_values.sum()) if injection_values is not None else 0.0
+        active_injectors = int((injection_values > 0).sum()) if injection_values is not None else 0
+
         c1, c2, c3 = st.columns(3)
         c1.metric("Files processed", f"{len(files) - len(errors):,}")
         c2.metric("Rows extracted", f"{len(result):,}")
         c3.metric("Unique dates", f"{result['date'].nunique():,}" if not result.empty else "0")
+        c4, c5 = st.columns(2)
+        c4.metric("Active injector rows", f"{active_injectors:,}")
+        c5.metric("Total Water Injection", f"{injection_total:,.0f} bbl")
 
         if not errors.empty:
             st.warning(f"{len(errors):,} file(s) could not be processed.")
@@ -33,7 +41,14 @@ def render_wds_uploader():
             return
 
         st.success(f"Extracted {len(result):,} unique date + well records.")
-        st.dataframe(result.drop(columns=["source_file"]).head(200), use_container_width=True, hide_index=True)
+        preview = result.drop(columns=["source_file"]).copy()
+        preview["_injection_sort"] = preview["injection_rate"].fillna(-1)
+        preview = preview.sort_values(
+            ["_injection_sort", "date", "ALIAS"],
+            ascending=[False, True, True],
+        ).drop(columns="_injection_sort")
+        st.caption("Injector rows are shown first so the extracted injection values can be verified before upload.")
+        st.dataframe(preview.head(200), use_container_width=True, hide_index=True)
 
         output = result.drop(columns=["source_file"])
         st.download_button(
