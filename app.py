@@ -10,6 +10,7 @@ from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
 from historical_uploader import render_wds_uploader
+from decline_review import render_decline_review
 
 
 def calculate_well_alerts(current_df, previous_df):
@@ -138,6 +139,8 @@ c3.metric("Total Gas Production", f"{kpis['total_gas']:,.1f} MCF", gas_delta)
 c4.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", f"{changes['water_prod_change']:+,} BWPD vs yesterday" if changes["water_prod_change"] is not None else None)
 c5.metric("Total Water Injection", f"{kpis['total_injection']:,} BWPD", f"{changes['injection_change']:+,} BWPD vs yesterday" if changes["injection_change"] is not None else None)
 c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
+
+render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
 
 st.subheader("Well Alerts")
 if well_alerts.empty:
@@ -283,3 +286,4 @@ st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
 visible_cols = [c for c in table_cols if c in filtered.columns]
 st.dataframe(filtered[visible_cols].sort_values("OIL", ascending=False), use_container_width=True, hide_index=True)
+
