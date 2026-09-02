@@ -107,7 +107,7 @@ def _read_reported_total(raw_bytes):
         value = value.replace(",", "").strip()
     total = pd.to_numeric(value, errors="coerce")
     if pd.isna(total):
-        raise ValueError("Could not read the daily Total Production value from cell AH2.")
+        raise ValueError("Could not read Actual Production from the designated Excel cell.")
     return float(total)
 
 
@@ -256,5 +256,5 @@ def upload_wds_production(df):
             .execute()
         )
         if response.data is None:
-            raise RuntimeError(f"Supabase returned no data while saving AH2 for {total['date']}.")
+            raise RuntimeError(f"Supabase returned no data while saving Actual Production for {total['date']}.")
     return len(records)
