@@ -132,6 +132,62 @@ def fmt(value, suffix=""):
     return "N/A" if pd.isna(value) else f"{value:,.1f}{suffix}"
 
 
+def management_summary(review, basis):
+    """Generate a factual management narrative without inferring causes."""
+    stats = review["summary"][basis]
+    coverage = (
+        f"Coverage is {stats['previous_days']}/14 baseline days and "
+        f"{stats['current_days']}/14 current days."
+    )
+    if pd.isna(stats["current"]) or pd.isna(stats["previous"]):
+        opening = "The period comparison is not yet available."
+    elif abs(stats["change"]) < 0.05:
+        opening = (
+            f"Average oil remained broadly stable at {stats['current']:,.1f} BOPD "
+            "versus the preceding 14-day period."
+        )
+    else:
+        direction = "decreased" if stats["change"] < 0 else "increased"
+        magnitude = abs(stats["change"])
+        percent = (
+            f" ({abs(stats['percent']):,.1f}%)"
+            if pd.notna(stats["percent"])
+            else ""
+        )
+        opening = (
+            f"Average oil {direction} by {magnitude:,.1f} BOPD{percent}, "
+            f"from {stats['previous']:,.1f} to {stats['current']:,.1f} BOPD."
+        )
+
+    declining = review["wells"].loc[
+        review["wells"]["Change BOPD"] < 0,
+        ["Well", "Change BOPD"],
+    ].head(3)
+    if declining.empty:
+        contributors = "No comparable AllLayer wells show a lower average oil rate."
+    else:
+        names = ", ".join(
+            f"{row['Well']} ({row['Change BOPD']:,.1f} BOPD)"
+            for _, row in declining.iterrows()
+        )
+        contributors = (
+            f"The largest directional AllLayer decline contributors are {names}. "
+            "This ranking identifies contribution, not a confirmed cause."
+        )
+
+    quality = (
+        "The comparison is PROVISIONAL because calendar-day coverage is incomplete. "
+        if not stats["complete"]
+        else ""
+    )
+    basis_note = (
+        "Per-well contributors are not an allocation of the reported AH2 total. "
+        if basis == "Total Production (AH2)"
+        else ""
+    )
+    return f"{quality}{opening} {coverage} {contributors} {basis_note}".strip()
+
+
 def make_review_chart(review, basis, events=None):
     import plotly.graph_objects as go
     column = "ah2" if basis == "Total Production (AH2)" else "well_oil"
@@ -187,6 +243,7 @@ def report_html(review, basis, actions, events):
     deltas = review['wells']['Change BOPD'].dropna()
     reconciliation = f"Comparable wells: {len(deltas)}/{len(review['wells'])}; declines {deltas[deltas<0].sum():,.1f} BOPD; gains +{deltas[deltas>0].sum():,.1f} BOPD; net {deltas.sum():+,.1f} BOPD."
     quality_label = "Complete 14 + 14 calendar-day coverage" if stats['complete'] else "PROVISIONAL — incomplete coverage; available-day averages only"
+    narrative = escape(management_summary(review, basis))
     return f'''<!doctype html><html><head><meta charset="utf-8"><title>Oil Production Review</title>
     <style>body{{font:13px Arial,sans-serif;color:#17243b;max-width:1000px;margin:24px auto}}h1{{font-size:24px}}h2{{font-size:16px}}table{{border-collapse:collapse;width:100%;font-size:11px}}td,th{{padding:5px;border-bottom:1px solid #ddd;text-align:left;overflow-wrap:anywhere}}.metrics{{display:flex;gap:25px;margin:15px 0}}.metrics b{{display:block;font-size:22px}}.notes{{font-size:10px}}svg{{width:100%;max-height:210px}}@media print{{@page{{size:A4 landscape;margin:12mm}}body{{margin:0;font-size:10px}}h1{{font-size:18px;margin:0 0 8px}}h2{{font-size:12px;margin:8px 0}}td,th{{padding:3px;font-size:9px}}.metrics{{margin:8px 0}}.metrics b{{font-size:16px}}svg{{max-height:120px}}.notes{{font-size:9px}}.appendix{{break-before:page}}}}</style></head><body>
     <h1>Oil Production Decline — 14-Day Review</h1>
@@ -194,6 +251,7 @@ def report_html(review, basis, actions, events):
     <p>Scope: {escape(str(review['field']))} | Basis: {escape(basis)}<br>
     Baseline {review['start']:%d %b %Y} – {review['current_start']-pd.Timedelta(days=1):%d %b %Y}; current {review['current_start']:%d %b %Y} – {review['end']:%d %b %Y}</p>
     <div class="metrics"><div>Current average<b>{fmt(stats['current'])} BOPD</b></div><div>Change<b>{fmt(stats['change'])} BOPD ({fmt(stats['percent'])}%)</b></div><div>Shortfall vs baseline<b>{fmt(stats['shortfall'])} bbl</b></div></div>
+    <h2>Management Summary</h2><p>{narrative}</p>
     {table(pd.DataFrame(summary_rows))}
     <h2>28-day oil trend</h2>{svg}<small>Grey: daily oil; green: 7-day average; orange: previous-period average. Missing dates are gaps.</small>
     <h2>Top decline contributors — AllLayer well oil, not AH2 allocation</h2><small>{reconciliation}</small>{table(top_wells[columns])}
@@ -236,6 +294,7 @@ def render_decline_review(trend, locations, selected_date, field):
     wells = review["wells"]
     d.metric("Wells with lower oil", str(int((wells["Change BOPD"] < 0).sum())), f"{int(wells['Latest zero'].sum())} now zero", delta_color="off")
     st.caption(f"Coverage: {stats['previous_days']}/14 baseline days; {stats['current_days']}/14 current days. Shortfall is a baseline comparison, not confirmed recoverable production.")
+    st.info("**Management Summary**\n\n" + management_summary(review, basis))
     summary = pd.DataFrame([{"Basis": label, "Previous BOPD": s["previous"], "Current BOPD": s["current"], "Change BOPD": s["change"], "Baseline days": s["previous_days"], "Current days": s["current_days"]} for label, s in review["summary"].items()])
     st.dataframe(
         summary,
