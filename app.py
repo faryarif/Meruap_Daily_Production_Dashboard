@@ -190,8 +190,13 @@ else:
     trend_view["bfpd"] = trend_view["OIL"] + trend_view["WATER"]
     denominator = trend_view["bfpd"].where(trend_view["bfpd"].ne(0))
     trend_view["water_cut_pct"] = (trend_view["WATER"] / denominator * 100).round(1).fillna(0.0)
-    st.plotly_chart(make_production_trend_fig(trend_view), use_container_width=True)
-    water_cut_tab, gas_tab = st.tabs(["Water Cut %", "Gas (MCF)"])
+    production_tab, water_cut_tab, gas_tab = st.tabs([
+        "BOPD / BFPD / BWPD",
+        "Water Cut %",
+        "Gas (MCF)",
+    ])
+    with production_tab:
+        st.plotly_chart(make_production_trend_fig(trend_view), use_container_width=True)
     with water_cut_tab:
         st.plotly_chart(make_water_cut_trend_fig(trend_view), use_container_width=True)
     with gas_tab:
