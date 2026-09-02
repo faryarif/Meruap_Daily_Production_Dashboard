@@ -129,7 +129,7 @@ reported_total_delta = (
     else None
 )
 c1.metric(
-    "Total Production",
+    "Actual Production",
     f"{reported_total:,.0f} BOPD" if reported_total is not None else "Not uploaded",
     reported_total_delta,
 )
