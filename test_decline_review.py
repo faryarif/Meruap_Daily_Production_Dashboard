@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
-from decline_review import build_review, report_html
+from decline_review import build_review, management_summary, report_html
 
 
 def fixture():
@@ -77,6 +77,20 @@ class ReviewTests(unittest.TestCase):
         r = self.review(raw)
         self.assertTrue(pd.isna(r['daily'].iloc[0].well_oil))
         self.assertTrue(any('Duplicate' in x for x in r['warnings']))
+
+    def test_management_summary_is_factual(self):
+        summary = management_summary(self.review(), 'Total Production (AH2)')
+        self.assertIn('decreased by 20.0 BOPD (10.0%)', summary)
+        self.assertIn('M-01 (-20.0 BOPD)', summary)
+        self.assertIn('not a confirmed cause', summary)
+        self.assertIn('not an allocation', summary)
+
+    def test_management_summary_marks_incomplete_data(self):
+        _, trend, _ = fixture()
+        trend.loc[20, 'reported_total'] = None
+        summary = management_summary(self.review(trend=trend), 'Total Production (AH2)')
+        self.assertIn('PROVISIONAL', summary)
+        self.assertIn('13/14 current days', summary)
 
     def test_html_escapes_notes(self):
         report = report_html(self.review(), 'Total Production (AH2)',pd.DataFrame({'Action':['<script>alert(1)</script>']}),pd.DataFrame())
