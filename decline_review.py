@@ -78,7 +78,7 @@ def build_review(raw, trend, locations, selected_date, field="All"):
         daily["ah2"] = grouped.max().where(grouped.nunique().le(1)).reindex(dates)
     summary = {"Per-well oil (AllLayer)": period_stats(daily.well_oil)}
     if field == "All":
-        summary = {"Total Production (AH2)": period_stats(daily.ah2), **summary}
+        summary = {"Actual Production": period_stats(daily.ah2), **summary}
     for label, stats in summary.items():
         if not stats["complete"]:
             warnings.append(f"{label}: {stats['previous_days']}/14 baseline days and {stats['current_days']}/14 current days. Available-day averages only; shortfall withheld.")
@@ -181,8 +181,8 @@ def management_summary(review, basis):
         else ""
     )
     basis_note = (
-        "Per-well contributors are not an allocation of the reported AH2 total. "
-        if basis == "Total Production (AH2)"
+        "Per-well contributors are not an allocation of the Actual Production total. "
+        if basis == "Actual Production"
         else ""
     )
     return f"{quality}{opening} {coverage} {contributors} {basis_note}".strip()
@@ -190,7 +190,7 @@ def management_summary(review, basis):
 
 def make_review_chart(review, basis, events=None):
     import plotly.graph_objects as go
-    column = "ah2" if basis == "Total Production (AH2)" else "well_oil"
+    column = "ah2" if basis == "Actual Production" else "well_oil"
     series = review["daily"][column]
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=series.index, y=series, name="Daily oil", mode="lines", line=dict(color="#94a3b8", width=1), connectgaps=False))
@@ -212,7 +212,7 @@ def make_review_chart(review, basis, events=None):
 def report_html(review, basis, actions, events):
     """Self-contained printable summary; escape all user-entered content."""
     stats = review["summary"][basis]
-    series = review["daily"]["ah2" if basis == "Total Production (AH2)" else "well_oil"]
+    series = review["daily"]["ah2" if basis == "Actual Production" else "well_oil"]
     valid = series.dropna()
     top = max(float(valid.max()) * 1.1, 1.0) if not valid.empty else 1.0
     def line(values, color, width):
@@ -254,7 +254,7 @@ def report_html(review, basis, actions, events):
     <h2>Management Summary</h2><p>{narrative}</p>
     {table(pd.DataFrame(summary_rows))}
     <h2>28-day oil trend</h2>{svg}<small>Grey: daily oil; green: 7-day average; orange: previous-period average. Missing dates are gaps.</small>
-    <h2>Top decline contributors — AllLayer well oil, not AH2 allocation</h2><small>{reconciliation}</small>{table(top_wells[columns])}
+    <h2>Top decline contributors — AllLayer well oil, not an allocation of Actual Production</h2><small>{reconciliation}</small>{table(top_wells[columns])}
     <ul class="notes">{warnings}</ul>
     <div class="appendix"><h2>Actions and operational events</h2><p>Manually entered; causes are not inferred as confirmed. Session-only notes exported with this report.</p>{table(actions)}<h2>Events</h2>{table(events)}</div>
     </body></html>'''
@@ -283,7 +283,7 @@ def render_decline_review(trend, locations, selected_date, field):
     st.caption(f"Baseline: {review['start']:%d %b %Y}–{review['current_start']-pd.Timedelta(days=1):%d %b %Y} | Current: {review['current_start']:%d %b %Y}–{review['end']:%d %b %Y} | Field: {field}")
     basis = st.radio("Management reporting basis", list(review["summary"]), horizontal=True, key=f"review_basis_{field}")
     if field != "All":
-        st.caption("AH2 is a whole-field reported total and is not allocated to individual fields. This view uses AllLayer well oil only.")
+        st.caption("Actual Production is a whole-field reported total and is not allocated to individual fields. This view uses AllLayer well oil only.")
     stats = review["summary"][basis]
     if not stats["complete"]:
         st.warning("PROVISIONAL: incomplete calendar-day coverage. Averages use available valid days; no volume shortfall is estimated.")
@@ -328,7 +328,7 @@ def render_decline_review(trend, locations, selected_date, field):
         st.plotly_chart(fig, use_container_width=True)
     deltas = wells["Change BOPD"].dropna()
     if not deltas.empty:
-        st.caption(f"Comparable wells ({len(deltas)}/{len(wells)}): declines {deltas[deltas<0].sum():,.1f} BOPD; gains +{deltas[deltas>0].sum():,.1f} BOPD; net {deltas.sum():+,.1f} BOPD. Well contributions explain AllLayer oil, not an allocation of AH2.")
+        st.caption(f"Comparable wells ({len(deltas)}/{len(wells)}): declines {deltas[deltas<0].sum():,.1f} BOPD; gains +{deltas[deltas>0].sum():,.1f} BOPD; net {deltas.sum():+,.1f} BOPD. Well contributions explain AllLayer oil, not an allocation of Actual Production.")
     st.dataframe(
         wells,
         hide_index=True,
@@ -351,13 +351,18 @@ def render_decline_review(trend, locations, selected_date, field):
         for warning in review["warnings"]:
             st.write("• " + warning)
         st.write("Water-cut changes use volume-weighted water cut and are expressed in percentage points. Per-well changes require 14 valid oil observations in each period. Current metadata status is not historical operating status.")
+        daily_display = review["daily"].reset_index().rename(columns={
+            "well_oil": "AllLayer Well Oil",
+            "oil_wells_present": "AllLayer Wells Present",
+            "ah2": "Actual Production",
+        })
         st.dataframe(
-            review["daily"].reset_index(),
+            daily_display,
             hide_index=True,
             use_container_width=True,
             column_config={
-                **one_decimal(["well_oil", "ah2"]),
-                "oil_wells_present": st.column_config.NumberColumn(format="%d"),
+                **one_decimal(["AllLayer Well Oil", "Actual Production"]),
+                "AllLayer Wells Present": st.column_config.NumberColumn(format="%d"),
             },
         )
     st.download_button("Download Management Report", data=report_html(review, basis, actions, events), file_name=f"oil_review_{review['end']:%Y%m%d}.html", mime="text/html", key=f"download_review_{scope}")
