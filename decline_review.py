@@ -206,6 +206,11 @@ def render_decline_review(trend, locations, selected_date, field):
     import streamlit as st
     import plotly.express as px
     from database import read_decline_window
+
+    one_decimal = lambda columns: {
+        column: st.column_config.NumberColumn(format="%.1f")
+        for column in columns
+    }
     st.subheader("Oil Production Decline — 14-Day Review")
     enabled = st.checkbox("Show management review", value=False, key="show_oil_management_review")
     if not enabled:
@@ -232,7 +237,18 @@ def render_decline_review(trend, locations, selected_date, field):
     d.metric("Wells with lower oil", str(int((wells["Change BOPD"] < 0).sum())), f"{int(wells['Latest zero'].sum())} now zero", delta_color="off")
     st.caption(f"Coverage: {stats['previous_days']}/14 baseline days; {stats['current_days']}/14 current days. Shortfall is a baseline comparison, not confirmed recoverable production.")
     summary = pd.DataFrame([{"Basis": label, "Previous BOPD": s["previous"], "Current BOPD": s["current"], "Change BOPD": s["change"], "Baseline days": s["previous_days"], "Current days": s["current_days"]} for label, s in review["summary"].items()])
-    st.dataframe(summary, hide_index=True, use_container_width=True)
+    st.dataframe(
+        summary,
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            **one_decimal(["Previous BOPD", "Current BOPD", "Change BOPD"]),
+            **{
+                "Baseline days": st.column_config.NumberColumn(format="%d"),
+                "Current days": st.column_config.NumberColumn(format="%d"),
+            },
+        },
+    )
     scope = f"{field}_{review['end']:%Y%m%d}"
     with st.expander("Operational events — optional"):
         st.caption("Enter confirmed events only. Notes stay in this browser session; download the report to retain them.")
@@ -244,12 +260,28 @@ def render_decline_review(trend, locations, selected_date, field):
         st.info("No comparable wells show a decline, or observations are incomplete.")
     else:
         fig = px.bar(declined, x="Change BOPD", y="Well", orientation="h", color_discrete_sequence=["#ef4444"])
-        fig.update_layout(height=330, margin=dict(l=0, r=0, t=10, b=0), xaxis_title="Change in average oil (BOPD)")
+        fig.update_traces(hovertemplate="Well=%{y}<br>Change BOPD=%{x:,.1f}<extra></extra>")
+        fig.update_layout(
+            height=330,
+            margin=dict(l=0, r=0, t=10, b=0),
+            xaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
+        )
         st.plotly_chart(fig, use_container_width=True)
     deltas = wells["Change BOPD"].dropna()
     if not deltas.empty:
         st.caption(f"Comparable wells ({len(deltas)}/{len(wells)}): declines {deltas[deltas<0].sum():,.1f} BOPD; gains +{deltas[deltas>0].sum():,.1f} BOPD; net {deltas.sum():+,.1f} BOPD. Well contributions explain AllLayer oil, not an allocation of AH2.")
-    st.dataframe(wells, hide_index=True, use_container_width=True)
+    st.dataframe(
+        wells,
+        hide_index=True,
+        use_container_width=True,
+        column_config=one_decimal([
+            "Previous BOPD",
+            "Current BOPD",
+            "Change BOPD",
+            "Change %",
+            "WC change (pp)",
+        ]),
+    )
     with st.expander("Action register"):
         st.caption("Session-only working notes, not shared or saved to the database. Include them in the downloaded report.")
         action_rows = wells.loc[(wells["Change BOPD"] < 0) | wells["Change BOPD"].isna(), ["Well", "Indication", "Suggested action"]].copy()
@@ -260,7 +292,15 @@ def render_decline_review(trend, locations, selected_date, field):
         for warning in review["warnings"]:
             st.write("• " + warning)
         st.write("Water-cut changes use volume-weighted water cut and are expressed in percentage points. Per-well changes require 14 valid oil observations in each period. Current metadata status is not historical operating status.")
-        st.dataframe(review["daily"].reset_index(), hide_index=True, use_container_width=True)
+        st.dataframe(
+            review["daily"].reset_index(),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                **one_decimal(["well_oil", "ah2"]),
+                "oil_wells_present": st.column_config.NumberColumn(format="%d"),
+            },
+        )
     st.download_button("Download Management Report", data=report_html(review, basis, actions, events), file_name=f"oil_review_{review['end']:%Y%m%d}.html", mime="text/html", key=f"download_review_{scope}")
     st.caption("Download a self-contained HTML report. Open it in a browser and Print → Save as PDF; the action register is an appendix.")
 
