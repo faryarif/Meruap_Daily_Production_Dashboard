@@ -25,7 +25,7 @@ class ReviewTests(unittest.TestCase):
     def test_two_periods_and_net_contributors(self):
         r = self.review()
         self.assertEqual(r['expected_wells'], 2)
-        self.assertEqual(r['summary']['Total Production (AH2)']['shortfall'], 280)
+        self.assertEqual(r['summary']['Actual Production']['shortfall'], 280)
         self.assertEqual(r['summary']['Per-well oil (AllLayer)']['change'], -10)
         self.assertEqual(r['wells']['Change BOPD'].sum(), -10)
         self.assertEqual(r['wells'].Well.tolist(), ['M-01','M-02'])
@@ -42,13 +42,13 @@ class ReviewTests(unittest.TestCase):
         _, trend, _ = fixture()
         trend.loc[20,'reported_total'] = None
         r = self.review(trend=trend)
-        self.assertEqual(r['summary']['Total Production (AH2)']['current_days'],13)
-        self.assertTrue(pd.isna(r['summary']['Total Production (AH2)']['shortfall']))
+        self.assertEqual(r['summary']['Actual Production']['current_days'],13)
+        self.assertTrue(pd.isna(r['summary']['Actual Production']['shortfall']))
         self.assertTrue(r['summary']['Per-well oil (AllLayer)']['complete'])
 
     def test_field_filter_and_no_field_ah2(self):
         r = self.review(field='A')
-        self.assertNotIn('Total Production (AH2)',r['summary'])
+        self.assertNotIn('Actual Production',r['summary'])
         self.assertEqual(r['summary']['Per-well oil (AllLayer)']['change'],-20)
         self.assertEqual(len(r['wells']),1)
 
@@ -79,7 +79,7 @@ class ReviewTests(unittest.TestCase):
         self.assertTrue(any('Duplicate' in x for x in r['warnings']))
 
     def test_management_summary_is_factual(self):
-        summary = management_summary(self.review(), 'Total Production (AH2)')
+        summary = management_summary(self.review(), 'Actual Production')
         self.assertIn('decreased by 20.0 BOPD (10.0%)', summary)
         self.assertIn('M-01 (-20.0 BOPD)', summary)
         self.assertIn('not a confirmed cause', summary)
@@ -88,15 +88,16 @@ class ReviewTests(unittest.TestCase):
     def test_management_summary_marks_incomplete_data(self):
         _, trend, _ = fixture()
         trend.loc[20, 'reported_total'] = None
-        summary = management_summary(self.review(trend=trend), 'Total Production (AH2)')
+        summary = management_summary(self.review(trend=trend), 'Actual Production')
         self.assertIn('PROVISIONAL', summary)
         self.assertIn('13/14 current days', summary)
 
     def test_html_escapes_notes(self):
-        report = report_html(self.review(), 'Total Production (AH2)',pd.DataFrame({'Action':['<script>alert(1)</script>']}),pd.DataFrame())
+        report = report_html(self.review(), 'Actual Production',pd.DataFrame({'Action':['<script>alert(1)</script>']}),pd.DataFrame())
         self.assertNotIn('<script>', report)
         self.assertIn('&lt;script&gt;',report)
         self.assertIn('<svg',report)
+        self.assertNotIn('AH2', report)
 
     def test_empty_field(self):
         with self.assertRaises(ValueError):
