@@ -581,7 +581,9 @@ def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
             colorbar={"title": "Loss %"},
         )
     )
-    return _chart_layout(fig, "Transfer Loss Heatmap", "")
+    fig = _chart_layout(fig, "Transfer Loss Heatmap", "")
+    fig.update_yaxes(autorange="reversed")
+    return fig
 
 
 def _chart_layout(fig: go.Figure, title: str, y_title: str) -> go.Figure:
