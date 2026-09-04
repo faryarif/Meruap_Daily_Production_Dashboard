@@ -30,7 +30,10 @@ st.set_page_config(
 )
 inject_styles(st)
 
-st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
+with st.sidebar:
+    st.subheader("Navigation")
+    st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
+    st.page_link("pages/2_Monthly_Reconciliation.py", label="Monthly Reconciliation", icon="📊")
 st.title("Monthly Production & Lifting")
 st.caption(
     "Monthly reconciliation from the field through Block Stations, STA, Bajubang, Tempino, "
