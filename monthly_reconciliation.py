@@ -493,7 +493,7 @@ def make_sankey_figure(row: pd.Series | dict[str, Any]) -> go.Figure:
         "Meter difference",
         "Tempino → S. Gerong loss/gain",
     ]
-    labels = [f"{name}<br>{value:,.1f} bbl" for name, value in core]
+    labels = [f"{name}<br>{np.ceil(value):,.0f} bbl" for name, value in core]
     colors = ["#22c55e"] + ["#38bdf8"] * 8 + ["#a855f7"]
     source: list[int] = []
     target: list[int] = []
@@ -506,28 +506,30 @@ def make_sankey_figure(row: pd.Series | dict[str, Any]) -> go.Figure:
         if main_value > 0:
             source.append(index)
             target.append(index + 1)
-            values.append(main_value)
+            values.append(float(np.ceil(main_value)))
             link_colors.append("rgba(56,189,248,0.38)")
         difference = start_value - end_value
         if abs(difference) >= 0.05:
             adjustment_index = len(labels)
             if difference > 0:
-                labels.append(f"{adjustment_name}<br>Loss {difference:,.1f} bbl")
+                labels.append(f"{adjustment_name}<br>Loss {np.ceil(difference):,.0f} bbl")
                 colors.append("#ef4444")
                 source.append(index)
                 target.append(adjustment_index)
-                values.append(difference)
+                values.append(float(np.ceil(difference)))
                 link_colors.append("rgba(239,68,68,0.42)")
             else:
-                labels.append(f"{adjustment_name}<br>Gain/release {-difference:,.1f} bbl")
+                labels.append(f"{adjustment_name}<br>Gain/release {np.ceil(-difference):,.0f} bbl")
                 colors.append("#22c55e")
                 source.append(adjustment_index)
                 target.append(index + 1)
-                values.append(-difference)
+                values.append(float(np.ceil(-difference)))
                 link_colors.append("rgba(34,197,94,0.42)")
     fig = go.Figure(
         go.Sankey(
             arrangement="snap",
+            valueformat=",.0f",
+            valuesuffix=" bbl",
             node={"label": labels, "color": colors, "pad": 15, "thickness": 16, "line": {"width": 0}},
             link={"source": source, "target": target, "value": values, "color": link_colors},
         )
