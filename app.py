@@ -77,7 +77,7 @@ def calculate_well_alerts(current_df, previous_df):
         .reset_index(drop=True)
     )
 
-st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="expanded")
 inject_styles(st)
 
 try:
