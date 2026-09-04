@@ -334,6 +334,19 @@ def loss_segments(row: pd.Series | dict[str, Any]) -> list[LossSegment]:
     ]
 
 
+def heatmap_loss_segments(row: pd.Series | dict[str, Any]) -> list[LossSegment]:
+    """Return transfer losses in physical field-to-lifting order."""
+    block_production = _value(row, "bsa_production_bbl") + _value(row, "bsb_production_bbl")
+    block_transfer = _value(row, "bsa_transfer_bbl") + _value(row, "bsb_transfer_bbl")
+    return [
+        LossSegment("Production at Field → Block Station A+B", _value(row, "field_production_bbl"), block_production),
+        LossSegment("Block Station A+B → Staging Area", block_transfer, _value(row, "sta_received_bbl")),
+        LossSegment("Staging Area → SPU Bajubang", _value(row, "sta_transfer_bbl"), _value(row, "bajubang_received_bbl")),
+        LossSegment("SPU Bajubang → PPP Tempino", _value(row, "bajubang_pumped_bbl"), _value(row, "tempino_meter_gross_bbl")),
+        LossSegment("PPP Tempino → S. Gerong", _value(row, "tempino_pumping_net_bbl"), _value(row, "s_gerong_received_bbl")),
+    ]
+
+
 def loss_segment_frame(row: pd.Series | dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -543,13 +556,17 @@ def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
     actual = normalize_monthly_data(df)
     actual = actual[actual["reporting_status"].eq("Actual")]
     rows = []
+    segment_order: list[str] = []
     for _, record in actual.iterrows():
-        for item in loss_segments(record):
+        items = heatmap_loss_segments(record)
+        if not segment_order:
+            segment_order = [item.segment for item in items]
+        for item in items:
             rows.append({"Month": record["report_month"], "Segment": item.segment, "Loss %": item.loss_pct})
     source = pd.DataFrame(rows)
     if source.empty:
         return _chart_layout(go.Figure(), "Transfer Loss Heatmap", "")
-    pivot = source.pivot(index="Segment", columns="Month", values="Loss %")
+    pivot = source.pivot(index="Segment", columns="Month", values="Loss %").reindex(segment_order)
     text = np.where(pd.isna(pivot.values), "", np.vectorize(lambda x: f"{x:.2f}%")(pivot.fillna(0).values))
     fig = go.Figure(
         go.Heatmap(
