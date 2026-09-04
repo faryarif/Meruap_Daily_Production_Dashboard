@@ -80,6 +80,11 @@ def calculate_well_alerts(current_df, previous_df):
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="expanded")
 inject_styles(st)
 
+with st.sidebar:
+    st.subheader("Navigation")
+    st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
+    st.page_link("pages/2_Monthly_Reconciliation.py", label="Monthly Reconciliation", icon="📊")
+
 try:
     locations_df = read_locations()
     trend_df = read_daily_trend()
