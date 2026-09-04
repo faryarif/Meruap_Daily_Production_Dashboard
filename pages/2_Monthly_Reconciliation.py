@@ -12,6 +12,7 @@ from monthly_reconciliation import (
     make_monthly_trend_figure,
     make_rc_chart,
     make_sankey_figure,
+    make_tank_transfer_figure,
     make_waterfall_figure,
     normalize_monthly_data,
     parse_lifting_workbook,
@@ -173,12 +174,16 @@ if largest_loss is not None:
         f"{largest_loss['Magnitude (bbl)']:,.1f} bbl ({largest_loss['Magnitude (%)']:,.2f}%)."
     )
 
-flow_tab, reconciliation_tab, trend_tab, losses_tab = st.tabs(
-    ["Flow", "Reconciliation", "Monthly Trends", "Losses"]
+flow_tab, tank_tab, reconciliation_tab, trend_tab, losses_tab = st.tabs(
+    ["Flow", "Tank Transfer", "Reconciliation", "Monthly Trends", "Losses"]
 )
 with flow_tab:
     st.plotly_chart(make_sankey_figure(selected), use_container_width=True, config={"displayModeBar": False})
     st.caption("Red branches indicate losses or inventory increases. Green branches indicate gains or inventory releases.")
+
+with tank_tab:
+    st.plotly_chart(make_tank_transfer_figure(selected), use_container_width=True, config={"displayModeBar": False})
+    st.caption("Hover or tap each tank and shipping stage to view the transferred volume for the selected month.")
 
 with reconciliation_tab:
     st.plotly_chart(make_waterfall_figure(selected), use_container_width=True, config={"displayModeBar": False})
