@@ -148,7 +148,7 @@ with month_col:
 selected = year_data[year_data["report_month"].eq(selected_month)].iloc[0]
 field_production = float(selected["field_production_bbl"] or 0)
 lifting = float(selected["s_gerong_received_bbl"] or 0)
-gap = field_production - lifting
+gap = lifting - field_production
 realization = lifting / field_production * 100 if field_production else 0.0
 segments = loss_segment_frame(selected)
 net_transfer_loss = float(segments["Signed Difference (bbl)"].sum())
@@ -161,7 +161,7 @@ with k2:
     st.metric("RC Actual Reference", f"{float(selected['rc_volume_bbl'] or 0):,.1f} bbl")
     st.caption(f"{float(selected['rc_bopd'] or 0):,.1f} BOPD")
 k3.metric("Received S. Gerong", f"{lifting:,.1f} bbl")
-k4.metric("Field-to-Lifting Gap", f"{gap:,.1f} bbl", f"{gap / field_production * 100:,.1f}%" if field_production else None, delta_color="inverse")
+k4.metric("Field-to-Lifting Gap", f"{gap:,.1f} bbl", f"{gap / field_production * 100:,.1f}%" if field_production else None, delta_color="normal")
 k5.metric("Lifting Realization", f"{realization:,.1f}%")
 
 if largest_loss is not None:
