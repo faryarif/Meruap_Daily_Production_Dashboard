@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from monthly_reconciliation import loss_segment_frame, reconciliation_components
+from monthly_reconciliation import heatmap_loss_segments, loss_segment_frame, reconciliation_components
 
 
 class MonthlyReconciliationTests(unittest.TestCase):
@@ -10,6 +10,8 @@ class MonthlyReconciliationTests(unittest.TestCase):
         self.august = pd.Series(
             {
                 "field_production_bbl": 26456.181487,
+                "bsa_production_bbl": 14799.548,
+                "bsb_production_bbl": 11656.633487,
                 "bsa_transfer_bbl": 14185.428880,
                 "bsb_transfer_bbl": 11317.394130,
                 "bsa_storage_loss_gain_bbl": -1273.905018,
@@ -51,6 +53,20 @@ class MonthlyReconciliationTests(unittest.TestCase):
         final_segment = frame[frame["Segment"].eq("Tempino → S. Gerong")].iloc[0]
         self.assertEqual(final_segment["Result"], "Loss")
         self.assertGreater(final_segment["Magnitude (bbl)"], 0)
+
+
+    def test_heatmap_follows_field_to_lifting_order(self):
+        labels = [item.segment for item in heatmap_loss_segments(self.august)]
+        self.assertEqual(
+            labels,
+            [
+                "Production at Field → Block Station A+B",
+                "Block Station A+B → Staging Area",
+                "Staging Area → SPU Bajubang",
+                "SPU Bajubang → PPP Tempino",
+                "PPP Tempino → S. Gerong",
+            ],
+        )
 
 
 if __name__ == "__main__":
