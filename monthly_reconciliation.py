@@ -552,6 +552,71 @@ def make_sankey_figure(row: pd.Series | dict[str, Any]) -> go.Figure:
     return fig
 
 
+def make_tank_transfer_figure(row: pd.Series | dict[str, Any]) -> go.Figure:
+    """Show the physical tank, shipping, and lifting sequence."""
+    stages = [
+        ("Production at Field", "Field production tanks", _value(row, "field_production_bbl"), "square", 48, "#22c55e", "🛢️"),
+        (
+            "Block Station A+B",
+            "Combined block-station production tanks",
+            _value(row, "bsa_production_bbl") + _value(row, "bsb_production_bbl"),
+            "square",
+            54,
+            "#38bdf8",
+            "🛢️",
+        ),
+        ("Staging Area", "Staging-area receiving tank", _value(row, "sta_received_bbl"), "square", 54, "#38bdf8", "🛢️"),
+        ("SPU Bajubang", "Bajubang receiving tank", _value(row, "bajubang_received_bbl"), "square", 54, "#38bdf8", "🛢️"),
+        ("Shipping Truck", "Shipping transfer", _value(row, "shipping_received_bbl"), "diamond", 48, "#f59e0b", "🚛"),
+        ("PPP Tempino", "Tempino metering and storage tank", _value(row, "tempino_meter_gross_bbl"), "square", 62, "#a78bfa", "🛢️"),
+        ("Lifting Tank S. Gerong", "Official lifting received at KM-3", _value(row, "s_gerong_received_bbl"), "square", 76, "#a855f7", "🏭"),
+    ]
+    x = [0.0] * len(stages)
+    y = list(range(len(stages) - 1, -1, -1))
+    labels = [f"{name}<br>{np.ceil(volume):,.0f} bbl" for name, _, volume, _, _, _, _ in stages]
+    descriptions = [description for _, description, _, _, _, _, _ in stages]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="lines",
+            line={"color": "rgba(56,189,248,0.38)", "width": 8},
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            mode="markers+text",
+            marker={
+                "symbol": [symbol for _, _, _, symbol, _, _, _ in stages],
+                "size": [size for _, _, _, _, size, _, _ in stages],
+                "color": [color for _, _, _, _, _, color, _ in stages],
+                "line": {"color": "rgba(226,232,240,0.75)", "width": 1.5},
+            },
+            text=labels,
+            textposition="middle right",
+            customdata=descriptions,
+            hovertemplate="<b>%{text}</b><br>%{customdata}<extra></extra>",
+            showlegend=False,
+        )
+    )
+    for position, (_, _, _, _, _, _, icon) in enumerate(stages):
+        fig.add_annotation(x=0, y=y[position], text=icon, showarrow=False, font={"size": 22})
+    for position in range(len(stages) - 1):
+        fig.add_annotation(x=0, y=(y[position] + y[position + 1]) / 2, text="↓", showarrow=False, font={"size": 22, "color": "#94a3b8"})
+
+    fig = _chart_layout(fig, "Interactive Tank-to-Lifting Transfer", "")
+    fig.update_layout(height=760, hovermode="closest", margin={"l": 30, "r": 30, "t": 65, "b": 30})
+    fig.update_xaxes(visible=False, range=[-0.4, 1.25], fixedrange=True)
+    fig.update_yaxes(visible=False, range=[-0.6, len(stages) - 0.4], fixedrange=True)
+    return fig
+
+
 def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
     actual = normalize_monthly_data(df)
     actual = actual[actual["reporting_status"].eq("Actual")]
@@ -582,7 +647,6 @@ def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
         )
     )
     fig = _chart_layout(fig, "Transfer Loss Heatmap", "")
-    fig.update_yaxes(autorange="reversed")
     return fig
 
 
