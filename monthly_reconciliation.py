@@ -532,7 +532,9 @@ def make_sankey_figure(row: pd.Series | dict[str, Any]) -> go.Figure:
             link={"source": source, "target": target, "value": values, "color": link_colors},
         )
     )
-    return _chart_layout(fig, "Production and Lifting Flow", "")
+    fig = _chart_layout(fig, "Production and Lifting Flow", "")
+    fig.update_layout(height=650)
+    return fig
 
 
 def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
