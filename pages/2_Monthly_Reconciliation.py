@@ -31,6 +31,17 @@ st.set_page_config(
 )
 inject_styles(st)
 
+nav_daily, nav_monthly = st.columns(2)
+with nav_daily:
+    if st.button("Daily Production Dashboard", key="top_nav_daily", use_container_width=True,
+                 type="secondary"):
+        st.switch_page("app.py")
+with nav_monthly:
+    if st.button("Monthly Reconciliation", key="top_nav_monthly", use_container_width=True,
+                 type="primary"):
+        st.switch_page("pages/2_Monthly_Reconciliation.py")
+
+
 with st.sidebar:
     st.subheader("Navigation")
     st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
