@@ -80,6 +80,17 @@ def calculate_well_alerts(current_df, previous_df):
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="expanded")
 inject_styles(st)
 
+nav_daily, nav_monthly = st.columns(2)
+with nav_daily:
+    if st.button("Daily Production Dashboard", key="top_nav_daily", use_container_width=True,
+                 type="primary"):
+        st.switch_page("app.py")
+with nav_monthly:
+    if st.button("Monthly Reconciliation", key="top_nav_monthly", use_container_width=True,
+                 type="secondary"):
+        st.switch_page("pages/2_Monthly_Reconciliation.py")
+
+
 with st.sidebar:
     st.subheader("Navigation")
     st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
