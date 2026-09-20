@@ -5,10 +5,21 @@ APP_CSS = """
 [data-testid="stMetricLabel"] { color: #64748b; }
 section[data-testid="stSidebar"] { background-color: #0f1729; }
 h1, h2, h3 { color: #e2e8f0 !important; }
-.block-container { padding-top: 1.5rem; }
+.block-container { padding-top: 4.5rem; }
 [data-testid="stToolbar"] { display: none; }
 [data-testid="stDecoration"] { display: none; }
-header[data-testid="stHeader"] { display: unset; }
+/* Keep sidebar controls available without a fixed opaque overlay. */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: none;
+}
+header[data-testid="stHeader"] button,
+header[data-testid="stHeader"] a,
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    pointer-events: auto;
+}
 [data-testid="collapsedControl"] { display: unset; }
 </style>
 """
