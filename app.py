@@ -77,7 +77,7 @@ def calculate_well_alerts(current_df, previous_df):
         .reset_index(drop=True)
     )
 
-st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
 inject_styles(st)
 
 nav_daily, nav_monthly = st.columns(2)
@@ -91,10 +91,6 @@ with nav_monthly:
         st.switch_page("pages/2_Monthly_Reconciliation.py")
 
 
-with st.sidebar:
-    st.subheader("Navigation")
-    st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
-    st.page_link("pages/2_Monthly_Reconciliation.py", label="Monthly Reconciliation", icon="📊")
 
 try:
     locations_df = read_locations()
