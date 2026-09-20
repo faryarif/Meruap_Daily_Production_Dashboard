@@ -27,7 +27,7 @@ st.set_page_config(
     page_title=f"Monthly Production & Lifting · {APP_TITLE}",
     page_icon=PAGE_ICON,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 inject_styles(st)
 
@@ -42,10 +42,6 @@ with nav_monthly:
         st.switch_page("pages/2_Monthly_Reconciliation.py")
 
 
-with st.sidebar:
-    st.subheader("Navigation")
-    st.page_link("app.py", label="Daily Production Dashboard", icon="🏠")
-    st.page_link("pages/2_Monthly_Reconciliation.py", label="Monthly Reconciliation", icon="📊")
 st.title("Monthly Production & Lifting")
 st.caption(
     "Monthly reconciliation from the field through Block Stations, STA, Bajubang, Tempino, "
