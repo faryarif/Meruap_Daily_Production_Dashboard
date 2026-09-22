@@ -4,18 +4,19 @@ import pandas as pd
 import streamlit as st
 from charts import make_well_history_multi_fig, make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
-from database import read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
+from database import read_decline_window, read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import filter_by_field, field_options, missing_coordinate_aliases
 from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
 from historical_uploader import render_wds_uploader
 from decline_review import render_decline_review
+from water_cut_alerts import assess_water_cut
 
 
-def calculate_well_alerts(current_df, previous_df):
+def calculate_well_alerts(current_df, previous_df, water_cut_assessments):
     """Return actionable per-well alerts for the selected snapshot."""
-    columns = ["Severity", "Alert", "Well", "Field", "Oil", "Gas", "Water", "Oil Change"]
+    columns = ["Severity", "Alert", "Well", "Field", "Oil", "Gas", "Water", "Oil Change", "Water Change", "Water Cut %", "WC Mean %", "WC Std Dev (pp)", "WC Effective Sigma (pp)", "WC Score", "Baseline Days", "WC Watch Limit %", "WC Warning Limit %"]
     current = current_df.copy() if current_df is not None else pd.DataFrame()
     previous = previous_df.copy() if previous_df is not None else pd.DataFrame()
 
@@ -50,8 +51,15 @@ def calculate_well_alerts(current_df, previous_df):
         elif prior_oil is not None and prior_oil > 0 and (oil_change / prior_oil) <= -0.30:
             alerts.append({"Severity": "Critical", "Alert": "Oil dropped 30% or more", **base})
 
-        if prior_water_cut is not None and (water_cut - prior_water_cut) > 1:
-            alerts.append({"Severity": "Warning", "Alert": "Water cut increased by more than 1%", **base})
+        assessment = water_cut_assessments.get(alias, {})
+        if assessment.get("severity"):
+            threshold = "3" if assessment["severity"] == "Warning" else "2"
+            details = {key: value for key, value in assessment.items() if key in columns}
+            alerts.append({
+                "Severity": assessment["severity"],
+                "Alert": f"Water cut above 30-day baseline +{threshold} sigma",
+                **base, **details,
+            })
 
     for alias, row in previous.loc[~previous.index.isin(current.index)].iterrows():
         if float(row["OIL"] or 0) > 0:
@@ -70,7 +78,7 @@ def calculate_well_alerts(current_df, previous_df):
         return pd.DataFrame(columns=columns)
     severity_order = {"Critical": 0, "Warning": 1, "Watch": 2}
     return (
-        pd.DataFrame(alerts)[columns]
+        pd.DataFrame(alerts).reindex(columns=columns)
         .assign(_order=lambda df: df["Severity"].map(severity_order))
         .sort_values(["_order", "Well", "Alert"])
         .drop(columns="_order")
@@ -127,7 +135,17 @@ reported_total = float(reported_totals.iloc[0]) if not reported_totals.empty els
 all_layer_wells = filter_by_field(read_all_layer_snapshot(selected_date_str), field_filter)
 previous_date_str = (pd.Timestamp(selected_date) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 previous_all_layer_wells = filter_by_field(read_all_layer_snapshot(previous_date_str), field_filter)
-well_alerts = calculate_well_alerts(all_layer_wells, previous_all_layer_wells)
+water_cut_assessments = {}
+water_cut_load_failed = False
+try:
+    alert_history = read_decline_window(selected_date_str)
+    water_cut_assessments = assess_water_cut(
+        alert_history.to_dict("records"), selected_date_str,
+        all_layer_wells["ALIAS"].dropna().unique(),
+    )
+except Exception:
+    water_cut_load_failed = True
+well_alerts = calculate_well_alerts(all_layer_wells, previous_all_layer_wells, water_cut_assessments)
 kpis = calculate_kpis(filtered)
 changes = calculate_daily_changes(trend_df, selected_date)
 missing_aliases = missing_coordinate_aliases(display_wells)
@@ -155,8 +173,26 @@ c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{chang
 render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
 
 st.subheader("Well Alerts")
+st.caption(
+    "Water cut: previous 30 calendar days, minimum 20 valid days. "
+    "Watch > mean +2 sigma; Warning > mean +3 sigma. "
+    "Effective sigma has a 0.1 percentage-point floor. "
+    "Zero-liquid, invalid and duplicate well/day records are excluded."
+)
+if water_cut_load_failed:
+    st.warning("Water-cut assessment unavailable: history could not be loaded. Oil alerts remain available.")
+elif water_cut_assessments:
+    assessed = sum(item["WC Status"] == "Assessed" for item in water_cut_assessments.values())
+    st.caption(f"Water-cut coverage: {assessed}/{len(water_cut_assessments)} wells assessed.")
+    excluded = [
+        {"Well": alias, "Reason": item["WC Status"], "Valid baseline days": item["Baseline Days"]}
+        for alias, item in water_cut_assessments.items() if item["WC Status"] != "Assessed"
+    ]
+    if excluded:
+        with st.expander("Wells without a water-cut assessment"):
+            st.dataframe(pd.DataFrame(excluded), hide_index=True, use_container_width=True)
 if well_alerts.empty:
-    st.success("No well alerts for the selected date and field.")
+    st.info("No alerts triggered by the available assessments for the selected date and field.")
 else:
     st.dataframe(
         well_alerts,
@@ -167,6 +203,11 @@ else:
             "Gas": st.column_config.NumberColumn("Gas (MCF)", format="%.1f"),
             "Water": st.column_config.NumberColumn("Water (BWPD)", format="%.1f"),
             "Oil Change": st.column_config.NumberColumn("Oil Change vs Yesterday", format="%+.1f"),
+            "Water Change": st.column_config.NumberColumn("Water Change vs Yesterday (BWPD)", format="%+.1f"),
+            **{name: st.column_config.NumberColumn(name, format="%.1f") for name in [
+                "Water Cut %", "WC Mean %", "WC Std Dev (pp)", "WC Effective Sigma (pp)",
+                "WC Score", "WC Watch Limit %", "WC Warning Limit %"
+            ]},
         },
     )
 
