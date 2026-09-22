@@ -2,7 +2,7 @@
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-from charts import make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
+from charts import make_well_history_multi_fig, make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import filter_by_field, field_options, missing_coordinate_aliases
@@ -289,30 +289,27 @@ with detail_col:
         top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
         if st.session_state.get("well_decline_selected_well") not in options:
             st.session_state["well_decline_selected_well"] = top_well
-        if st.session_state.get("well_decline_metric") not in metric_options:
-            st.session_state["well_decline_metric"] = "BOPD"
 
         selected_well = st.session_state["well_decline_selected_well"]
-        selected_metric = st.session_state["well_decline_metric"]
         well_history = read_well_history(selected_well)
 
-        if well_history.empty:
-            st.caption(f"No history yet for {selected_well}.")
-        else:
-            y_col, line_color, fill_color, y_title = metric_options[selected_metric]
-            st.plotly_chart(
-                make_well_history_fig(well_history.sort_values("date"), y_col, line_color, fill_color, y_title),
-                use_container_width=True,
-            )
-
+        graph_slot = st.container()
         st.selectbox("Select a well", options, key="well_decline_selected_well")
-        st.radio(
-            "Well decline metric",
-            list(metric_options),
-            key="well_decline_metric",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
+        enabled_metrics = []
+        toggle_columns = st.columns(len(metric_options))
+        for index, label in enumerate(metric_options):
+            with toggle_columns[index]:
+                if st.checkbox(label, value=(label == "BOPD"),
+                               key=f"well_decline_show_{index}"):
+                    enabled_metrics.append(label)
+        with graph_slot:
+            if well_history.empty:
+                st.caption(f"No history yet for {selected_well}.")
+            else:
+                st.plotly_chart(
+                    make_well_history_multi_fig(well_history.sort_values("date"), enabled_metrics),
+                    use_container_width=True,
+                )
 
 st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
