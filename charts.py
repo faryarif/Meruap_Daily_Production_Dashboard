@@ -80,3 +80,41 @@ def make_well_history_fig(well_history, y_col, line_color, fill_color, y_title):
     apply_dark_layout(fig, 300); fig.update_layout(xaxis=dict(gridcolor="#263144"), yaxis=dict(gridcolor="#263144", title=y_title))
     if y_col == "water_cut_pct": fig.update_layout(yaxis=dict(gridcolor="#263144", title=y_title, range=[0, 100]))
     return fig
+
+
+def make_well_history_multi_fig(well_history, selected_metrics):
+    """Overlay selected well series with separate axes for different units."""
+    series = [
+        ("BOPD", "OIL", "#22c55e", "y", "BOPD"),
+        ("BFPD", "bfpd", "#eab308", "y", "BFPD"),
+        ("BWPD", "WATER", "#38bdf8", "y", "BWPD"),
+        ("Water Cut %", "water_cut_pct", "#a855f7", "y2", "%"),
+        ("Gas (MCF)", "GAS", "#f97316", "y3", "MCF"),
+    ]
+    fig = go.Figure()
+    for label, column, color, axis, unit in series:
+        if label in selected_metrics and column in well_history.columns:
+            fig.add_trace(go.Scatter(
+                x=well_history["date"], y=well_history[column], name=label,
+                mode="lines", line=dict(color=color, width=2), yaxis=axis,
+                hovertemplate=f"%{{x|%d %b %Y}}<br>{label}: %{{y:,.1f}} {unit}<extra></extra>",
+            ))
+    apply_dark_layout(fig, 300)
+    has_water_cut = "Water Cut %" in selected_metrics
+    has_gas = "Gas (MCF)" in selected_metrics
+    fig.update_layout(
+        xaxis=dict(gridcolor="#263144", domain=[0, 0.8 if has_water_cut and has_gas else 1]),
+        yaxis=dict(title="Liquid (bbl/day)", gridcolor="#263144", rangemode="tozero",
+                   visible=any(m in selected_metrics for m in ["BOPD", "BFPD", "BWPD"])),
+        yaxis2=dict(title="Water Cut (%)", overlaying="y", side="right",
+                    range=[0, 100], showgrid=False, visible=has_water_cut),
+        yaxis3=dict(title="Gas (MCF)", overlaying="y", side="right",
+                    anchor="free", position=1, rangemode="tozero", showgrid=False, visible=has_gas),
+        margin=dict(l=10, r=10, t=10, b=0),
+        legend=dict(orientation="h", y=-0.2, x=0, itemclick=False, itemdoubleclick=False),
+        hovermode="x unified",
+    )
+    if not fig.data:
+        fig.add_annotation(text="Enable a metric below to display its trend.",
+                           x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
+    return fig
