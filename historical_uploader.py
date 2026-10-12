@@ -11,7 +11,7 @@ def render_wds_uploader():
             display: none !important;
         }
         div.st-key-wds_batch_uploader [data-testid="stFileUploaderDropzoneInstructions"]::before {
-            content: "Drop multiple daily WDS reports here";
+            content: "DROP multiple daily WDS reports here (.xlsx)";
             display: block;
             font-size: 0.95rem;
             font-weight: 600;
@@ -22,7 +22,7 @@ def render_wds_uploader():
         unsafe_allow_html=True,
     )
     files = st.file_uploader(
-        "Drop multiple daily WDS reports here",
+        "DROP multiple daily WDS reports here (.xlsx)",
         type=["xlsx", "xls"],
         accept_multiple_files=True,
         key="wds_batch_uploader",
