@@ -35,8 +35,6 @@ if st.session_state.pop("whatsapp_daily_reset_form", False):
         st.session_state.pop(key, None)
     st.session_state["whatsapp_daily_raw"] = ""
 
-st.title("Laporan Harian WhatsApp")
-st.caption("Salin pesan WhatsApp, periksa hasil pembacaan, lalu simpan sebagai laporan operasi harian.")
 if st.session_state.get("whatsapp_daily_saved_message"):
     st.success(st.session_state.pop("whatsapp_daily_saved_message"))
 
@@ -140,7 +138,6 @@ if payload:
                 st.error(f"Laporan belum tersimpan. Periksa koneksi atau konfigurasi Supabase. Detail: {exc}")
 
 st.divider()
-st.subheader("Laporan tersimpan")
 try:
     reports = read_reports()
 except Exception as exc:
@@ -154,12 +151,7 @@ else:
     reports["created_at"] = pd.to_datetime(reports["created_at"], errors="coerce")
     reports = reports.sort_values(["report_date", "created_at"], ascending=[False, False])
 
-    st.subheader("Grafik Bulanan")
-    st.caption(
-        "Tren harian memakai satu versi laporan terbaru untuk setiap tanggal, "
-        "agar revisi laporan tidak dihitung dua kali."
-    )
-    monthly_reports = (
+        monthly_reports = (
         reports.dropna(subset=["report_date"])
         .sort_values(["report_date", "created_at"], ascending=[True, True])
         .drop_duplicates(subset=["report_date"], keep="last")
