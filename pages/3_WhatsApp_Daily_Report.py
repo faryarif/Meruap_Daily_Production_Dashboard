@@ -164,14 +164,17 @@ else:
         "Januari", "Februari", "Maret", "April", "Mei", "Juni",
         "Juli", "Agustus", "September", "Oktober", "November", "Desember",
     ]
-    month_key = st.selectbox(
-        "Bulan laporan",
-        month_options,
-        format_func=lambda value: f"{month_names[int(value[5:7]) - 1]} {value[:4]}",
-        key="whatsapp_month_chart_period",
-    )
+    month_col, days_col = st.columns([3, 1], vertical_alignment="bottom")
+    with month_col:
+        month_key = st.selectbox(
+            "Bulan laporan",
+            month_options,
+            format_func=lambda value: f"{month_names[int(value[5:7]) - 1]} {value[:4]}",
+            key="whatsapp_month_chart_period",
+        )
     month_rows = monthly_reports[monthly_reports["month_key"].eq(month_key)].copy()
-    st.metric("Hari dengan laporan", f"{len(month_rows):,}")
+    with days_col:
+        st.metric("Hari", f"{len(month_rows):,}")
 
     flow_rows, loss_rows, stock_rows, road_rows = [], [], [], []
     for _, report in month_rows.iterrows():
