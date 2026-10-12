@@ -4,12 +4,30 @@ from historical_etl import process_wds_files, to_excel_bytes, upload_wds_product
 
 
 def render_wds_uploader():
+    st.markdown(
+        """
+        <style>
+        div.st-key-wds_batch_uploader [data-testid="stFileUploaderDropzoneInstructions"] > div:first-child {
+            display: none !important;
+        }
+        div.st-key-wds_batch_uploader [data-testid="stFileUploaderDropzoneInstructions"]::before {
+            content: "Drop multiple daily WDS reports here";
+            display: block;
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     files = st.file_uploader(
         "Drop multiple daily WDS reports here",
         type=["xlsx", "xls"],
         accept_multiple_files=True,
         key="wds_batch_uploader",
         help="The ETL extracts Date, Well, BO, BW, Gas, Total Injeksi bbls, and Actual Production, and normalizes well names such as M # 01 to M-01.",
+        label_visibility="collapsed",
     )
     if not files:
         return
