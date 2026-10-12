@@ -1,5 +1,4 @@
 import io
-from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -128,15 +127,5 @@ def upsert_production(df, filename):
     batch_size = 1000
     for start in range(0, len(records), batch_size):
         client.table("ProdWellBasiss").upsert(records[start:start + batch_size], on_conflict="date,ALIAS").execute()
-
-    client.table("production_upload_log").insert({
-        "filename": filename,
-        "uploaded_at": datetime.now().astimezone().isoformat(),
-        "rows_read": len(records),
-        "rows_inserted": inserted,
-        "rows_updated": updated,
-        "rows_rejected": 0,
-        "status": "SUCCESS",
-    }).execute()
 
     return {"inserted": inserted, "updated": updated, "rows": len(records)}
