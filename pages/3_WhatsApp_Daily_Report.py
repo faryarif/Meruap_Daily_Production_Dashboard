@@ -151,7 +151,7 @@ else:
     reports["created_at"] = pd.to_datetime(reports["created_at"], errors="coerce")
     reports = reports.sort_values(["report_date", "created_at"], ascending=[False, False])
 
-        monthly_reports = (
+    monthly_reports = (
         reports.dropna(subset=["report_date"])
         .sort_values(["report_date", "created_at"], ascending=[True, True])
         .drop_duplicates(subset=["report_date"], keep="last")
