@@ -315,6 +315,8 @@ with detail_col:
                     use_container_width=True,
                 )
 
+render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
+
 st.subheader("Well Alerts")
 st.caption(
     "Water cut: previous 30 calendar days, minimum 20 valid days. "
@@ -354,8 +356,6 @@ else:
             ]},
         },
     )
-
-render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
 
 st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
