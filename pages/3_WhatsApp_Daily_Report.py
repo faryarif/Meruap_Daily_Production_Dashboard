@@ -38,8 +38,10 @@ if st.session_state.pop("whatsapp_daily_reset_form", False):
 if st.session_state.get("whatsapp_daily_saved_message"):
     st.success(st.session_state.pop("whatsapp_daily_saved_message"))
 
-with st.expander("Input laporan WhatsApp", expanded=True):
-    raw_message = st.text_area("Pesan WhatsApp", key="whatsapp_daily_raw", height=320,
+with st.expander("Input laporan WhatsApp", expanded=False):
+    draft_message = st.session_state.get("whatsapp_daily_raw", "")
+    input_height = 160 if not draft_message.strip() else 280
+    raw_message = st.text_area("Pesan WhatsApp", key="whatsapp_daily_raw", height=input_height,
                                placeholder="Tempel pesan laporan harian di sini…")
     if st.button("Baca pesan", type="primary", key="whatsapp_daily_parse"):
         if not raw_message.strip():
@@ -137,7 +139,6 @@ if payload:
             except Exception as exc:
                 st.error(f"Laporan belum tersimpan. Periksa koneksi atau konfigurasi Supabase. Detail: {exc}")
 
-st.divider()
 try:
     reports = read_reports()
 except Exception as exc:
