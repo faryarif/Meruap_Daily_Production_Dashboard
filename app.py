@@ -122,13 +122,19 @@ if wells_df.empty:
 col_title, col_date, col_filter = st.columns([3, 1, 1])
 with col_title:
     st.title("Daily Production Dashboard")
-    st.caption("· Shared live dashboard · " + datetime.now().strftime("%A, %B %d, %Y"))
 with col_date:
+    st.markdown(
+        f'<div style="padding-top: 1.1rem; text-align: center; font-size: 1.05rem; font-weight: 600;">'
+        f'{datetime.now().strftime("%A, %B %d, %Y")}</div>',
+        unsafe_allow_html=True,
+    )
+with col_filter:
     date_values = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
     selected_date = st.date_input("Snapshot date", value=date_values[0], min_value=date_values[-1], max_value=date_values[0])
     selected_date_str = selected_date.strftime("%Y-%m-%d")
-with col_filter:
-    field_filter = st.selectbox("Field", field_options(wells_df))
+
+# Field filter remains alongside the title row on wide layouts.
+field_filter = st.selectbox("Field", field_options(wells_df))
 
 render_wds_uploader()
 
