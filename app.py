@@ -174,48 +174,6 @@ c4.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", 
 c5.metric("Total Water Injection", f"{kpis['total_injection']:,} BWPD", f"{changes['injection_change']:+,} BWPD vs yesterday" if changes["injection_change"] is not None else None)
 c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
 
-render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
-
-st.subheader("Well Alerts")
-st.caption(
-    "Water cut: previous 30 calendar days, minimum 20 valid days. "
-    "Watch > mean +2 sigma; Warning > mean +3 sigma. "
-    "Effective sigma has a 0.1 percentage-point floor. "
-    "Zero-liquid, invalid and duplicate well/day records are excluded."
-)
-if water_cut_load_failed:
-    st.warning("Water-cut assessment unavailable: history could not be loaded. Oil alerts remain available.")
-elif water_cut_assessments:
-    assessed = sum(item["WC Status"] == "Assessed" for item in water_cut_assessments.values())
-    st.caption(f"Water-cut coverage: {assessed}/{len(water_cut_assessments)} wells assessed.")
-    excluded = [
-        {"Well": alias, "Reason": item["WC Status"], "Valid baseline days": item["Baseline Days"]}
-        for alias, item in water_cut_assessments.items()
-        if item["WC Status"] not in {"Assessed", "Current data valid"}
-    ]
-    if excluded:
-        with st.expander("Water-cut data status and exclusions"):
-            st.dataframe(pd.DataFrame(excluded), hide_index=True, use_container_width=True)
-if well_alerts.empty:
-    st.info("No alerts triggered by the available assessments for the selected date and field.")
-else:
-    st.dataframe(
-        well_alerts,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Oil": st.column_config.NumberColumn("Oil (BOPD)", format="%.1f"),
-            "Gas": st.column_config.NumberColumn("Gas (MCF)", format="%.1f"),
-            "Water": st.column_config.NumberColumn("Water (BWPD)", format="%.1f"),
-            "Oil Change": st.column_config.NumberColumn("Oil Change vs Yesterday", format="%+.1f"),
-            "Water Change": st.column_config.NumberColumn("Water Change vs Yesterday (BWPD)", format="%+.1f"),
-            **{name: st.column_config.NumberColumn(name, format="%.1f") for name in [
-                "Water Cut %", "WC Mean %", "WC Std Dev (pp)", "WC Effective Sigma (pp)",
-                "WC Score", "WC Watch Limit %", "WC Warning Limit %"
-            ]},
-        },
-    )
-
 pie_col, map_col = st.columns([1, 1.3])
 with pie_col:
     st.subheader("Status & Field Totals")
@@ -356,6 +314,48 @@ with detail_col:
                     make_well_history_multi_fig(well_history.sort_values("date"), enabled_metrics),
                     use_container_width=True,
                 )
+
+st.subheader("Well Alerts")
+st.caption(
+    "Water cut: previous 30 calendar days, minimum 20 valid days. "
+    "Watch > mean +2 sigma; Warning > mean +3 sigma. "
+    "Effective sigma has a 0.1 percentage-point floor. "
+    "Zero-liquid, invalid and duplicate well/day records are excluded."
+)
+if water_cut_load_failed:
+    st.warning("Water-cut assessment unavailable: history could not be loaded. Oil alerts remain available.")
+elif water_cut_assessments:
+    assessed = sum(item["WC Status"] == "Assessed" for item in water_cut_assessments.values())
+    st.caption(f"Water-cut coverage: {assessed}/{len(water_cut_assessments)} wells assessed.")
+    excluded = [
+        {"Well": alias, "Reason": item["WC Status"], "Valid baseline days": item["Baseline Days"]}
+        for alias, item in water_cut_assessments.items()
+        if item["WC Status"] not in {"Assessed", "Current data valid"}
+    ]
+    if excluded:
+        with st.expander("Water-cut data status and exclusions"):
+            st.dataframe(pd.DataFrame(excluded), hide_index=True, use_container_width=True)
+if well_alerts.empty:
+    st.info("No alerts triggered by the available assessments for the selected date and field.")
+else:
+    st.dataframe(
+        well_alerts,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Oil": st.column_config.NumberColumn("Oil (BOPD)", format="%.1f"),
+            "Gas": st.column_config.NumberColumn("Gas (MCF)", format="%.1f"),
+            "Water": st.column_config.NumberColumn("Water (BWPD)", format="%.1f"),
+            "Oil Change": st.column_config.NumberColumn("Oil Change vs Yesterday", format="%+.1f"),
+            "Water Change": st.column_config.NumberColumn("Water Change vs Yesterday (BWPD)", format="%+.1f"),
+            **{name: st.column_config.NumberColumn(name, format="%.1f") for name in [
+                "Water Cut %", "WC Mean %", "WC Std Dev (pp)", "WC Effective Sigma (pp)",
+                "WC Score", "WC Watch Limit %", "WC Warning Limit %"
+            ]},
+        },
+    )
+
+render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
 
 st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
