@@ -61,9 +61,12 @@ def parse_indonesian_number(value: str | None) -> float | None:
         tail = text.rsplit(",", 1)[-1]
         text = text.replace(",", "." if len(tail) != 3 else "")
     elif "." in text:
-        tail = text.rsplit(".", 1)[-1]
-        if len(tail) == 3 and text.count(".") == 1:
-            text = text.replace(".", "")
+        parts = text.split(".")
+        tail = parts[-1]
+        if len(parts) > 2 and all(len(part) == 3 for part in parts[1:]):
+            text = "".join(parts)
+        elif len(tail) == 3 and len(parts) == 2:
+            text = "".join(parts)
     try:
         number = float(text)
     except (TypeError, ValueError):

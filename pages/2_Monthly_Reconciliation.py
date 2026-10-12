@@ -31,7 +31,7 @@ st.set_page_config(
 )
 inject_styles(st)
 
-nav_daily, nav_monthly = st.columns(2)
+nav_daily, nav_monthly, nav_whatsapp = st.columns(3)
 with nav_daily:
     if st.button("Daily Production Dashboard", key="top_nav_daily", use_container_width=True,
                  type="secondary"):
@@ -40,6 +40,10 @@ with nav_monthly:
     if st.button("Monthly Reconciliation", key="top_nav_monthly", use_container_width=True,
                  type="primary"):
         st.switch_page("pages/2_Monthly_Reconciliation.py")
+with nav_whatsapp:
+    if st.button("Laporan Harian WhatsApp", key="top_nav_whatsapp", use_container_width=True,
+                 type="secondary"):
+        st.switch_page("pages/3_WhatsApp_Daily_Report.py")
 
 
 st.title("Monthly Production & Lifting")
