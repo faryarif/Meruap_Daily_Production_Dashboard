@@ -126,7 +126,7 @@ with col_controls:
     date_values = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
     date_col, field_col = st.columns(2)
     with date_col:
-        selected_date = st.date_input("Snapshot date", value=date_values[0], min_value=date_values[-1], max_value=date_values[0])
+        selected_date = st.date_input("Report Date", value=date_values[0], min_value=date_values[-1], max_value=date_values[0], format="dddd, DD/MM/YYYY")
     with field_col:
         field_filter = st.selectbox("Field", field_options(wells_df))
     selected_date_str = selected_date.strftime("%Y-%m-%d")
