@@ -119,20 +119,17 @@ if wells_df.empty:
     st.warning("No data yet in Supabase - add rows to the 'ProdWellBasiss' table to see the dashboard.")
     st.stop()
 
-col_title, col_date, col_filter = st.columns([3.4, 1.7, 1.5], vertical_alignment="center")
+col_title, col_controls = st.columns([3, 2], vertical_alignment="center")
 with col_title:
     st.title("Daily Production Dashboard")
-with col_date:
-    st.markdown(
-        f'<div style="text-align: center; font-size: 1.05rem; font-weight: 600; white-space: nowrap;">'
-        f'{datetime.now().strftime("%A, %B %d, %Y")}</div>',
-        unsafe_allow_html=True,
-    )
-with col_filter:
+with col_controls:
     date_values = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
-    selected_date = st.date_input("Snapshot date", value=date_values[0], min_value=date_values[-1], max_value=date_values[0])
+    date_col, field_col = st.columns(2)
+    with date_col:
+        selected_date = st.date_input("Snapshot date", value=date_values[0], min_value=date_values[-1], max_value=date_values[0])
+    with field_col:
+        field_filter = st.selectbox("Field", field_options(wells_df))
     selected_date_str = selected_date.strftime("%Y-%m-%d")
-    field_filter = st.selectbox("Field", field_options(wells_df))
 
 render_wds_uploader()
 
