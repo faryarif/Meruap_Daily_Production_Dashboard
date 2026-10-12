@@ -24,8 +24,20 @@ with nav_whatsapp:
     if st.button("Laporan Harian WhatsApp", key="report_nav_whatsapp", use_container_width=True, type="primary"):
         st.switch_page("pages/3_WhatsApp_Daily_Report.py")
 
+if st.session_state.pop("whatsapp_daily_reset_form", False):
+    for key in [
+        "whatsapp_daily_payload", "whatsapp_daily_source", "whatsapp_daily_date",
+        "whatsapp_daily_review_date", "whatsapp_daily_sot", "whatsapp_daily_losses",
+        "whatsapp_daily_wells", "whatsapp_daily_stocks", "whatsapp_daily_quality",
+        "whatsapp_daily_road_tanks",
+    ]:
+        st.session_state.pop(key, None)
+    st.session_state["whatsapp_daily_raw"] = ""
+
 st.title("Laporan Harian WhatsApp")
 st.caption("Salin pesan WhatsApp, periksa hasil pembacaan, lalu simpan sebagai laporan operasi harian.")
+if st.session_state.get("whatsapp_daily_saved_message"):
+    st.success(st.session_state.pop("whatsapp_daily_saved_message"))
 
 with st.expander("Input laporan WhatsApp", expanded=True):
     raw_message = st.text_area("Pesan WhatsApp", key="whatsapp_daily_raw", height=320,
@@ -44,6 +56,7 @@ with st.expander("Input laporan WhatsApp", expanded=True):
             st.session_state["whatsapp_daily_payload"] = parsed
             parsed_date = parsed.get("report_date")
             st.session_state["whatsapp_daily_date"] = parsed_date.isoformat() if parsed_date else date.today().isoformat()
+            st.session_state["whatsapp_daily_source"] = raw_message
             st.success("Pesan dibaca. Tinjau dan koreksi tabel di bawah sebelum menyimpan.")
 
 payload = st.session_state.get("whatsapp_daily_payload")
@@ -117,14 +130,10 @@ if payload:
             }
             try:
                 save_report(report_date, source_message, saved_payload)
-                st.success(f"Laporan tanggal {report_date:%d %B %Y} tersimpan di Supabase.")
-                for key in [
-                    "whatsapp_daily_payload", "whatsapp_daily_date", "whatsapp_daily_review_date",
-                    "whatsapp_daily_sot", "whatsapp_daily_losses", "whatsapp_daily_wells",
-                    "whatsapp_daily_stocks", "whatsapp_daily_quality", "whatsapp_daily_road_tanks",
-                    "whatsapp_daily_raw",
-                ]:
-                    st.session_state.pop(key, None)
+                st.session_state["whatsapp_daily_saved_message"] = (
+                    f"Laporan tanggal {report_date:%d %B %Y} tersimpan di Supabase."
+                )
+                st.session_state["whatsapp_daily_reset_form"] = True
                 st.rerun()
             except Exception as exc:
                 st.error(f"Laporan belum tersimpan. Periksa koneksi atau konfigurasi Supabase. Detail: {exc}")
