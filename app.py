@@ -119,12 +119,12 @@ if wells_df.empty:
     st.warning("No data yet in Supabase - add rows to the 'ProdWellBasiss' table to see the dashboard.")
     st.stop()
 
-col_title, col_date, col_filter = st.columns([3, 1, 1])
+col_title, col_date, col_filter = st.columns([3.4, 1.7, 1.5], vertical_alignment="center")
 with col_title:
     st.title("Daily Production Dashboard")
 with col_date:
     st.markdown(
-        f'<div style="padding-top: 1.1rem; text-align: center; font-size: 1.05rem; font-weight: 600;">'
+        f'<div style="text-align: center; font-size: 1.05rem; font-weight: 600; white-space: nowrap;">'
         f'{datetime.now().strftime("%A, %B %d, %Y")}</div>',
         unsafe_allow_html=True,
     )
@@ -132,9 +132,7 @@ with col_filter:
     date_values = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
     selected_date = st.date_input("Snapshot date", value=date_values[0], min_value=date_values[-1], max_value=date_values[0])
     selected_date_str = selected_date.strftime("%Y-%m-%d")
-
-# Field filter remains alongside the title row on wide layouts.
-field_filter = st.selectbox("Field", field_options(wells_df))
+    field_filter = st.selectbox("Field", field_options(wells_df))
 
 render_wds_uploader()
 
@@ -367,4 +365,3 @@ st.subheader("Well Data")
 table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
 visible_cols = [c for c in table_cols if c in filtered.columns]
 st.dataframe(filtered[visible_cols].sort_values("OIL", ascending=False), use_container_width=True, hide_index=True)
-
