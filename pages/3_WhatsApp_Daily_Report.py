@@ -34,6 +34,12 @@ with st.expander("Input laporan WhatsApp", expanded=True):
         if not raw_message.strip():
             st.warning("Tempel pesan laporan terlebih dahulu.")
         else:
+            for key in [
+                "whatsapp_daily_review_date", "whatsapp_daily_sot", "whatsapp_daily_losses",
+                "whatsapp_daily_wells", "whatsapp_daily_stocks", "whatsapp_daily_quality",
+                "whatsapp_daily_road_tanks",
+            ]:
+                st.session_state.pop(key, None)
             parsed = parse_whatsapp_report(raw_message)
             st.session_state["whatsapp_daily_payload"] = parsed
             parsed_date = parsed.get("report_date")
@@ -48,6 +54,11 @@ if payload:
     else:
         st.warning("Tanggal tidak terbaca otomatis. Pilih tanggal laporan yang benar di bawah.")
 
+    source_message = st.session_state.get("whatsapp_daily_source", raw_message)
+    source_unchanged = raw_message == source_message
+    if not source_unchanged:
+        st.warning("Pesan berubah setelah dibaca. Tekan “Baca pesan” lagi agar hasil dan sumber tetap cocok.")
+
     report_date = st.date_input(
         "Tanggal laporan",
         value=date.fromisoformat(st.session_state.get("whatsapp_daily_date", date.today().isoformat())),
@@ -58,8 +69,17 @@ if payload:
         st.markdown(f"**{label}**")
         if help_text:
             st.caption(help_text)
+        empty_columns = {
+            "whatsapp_daily_sot": ["Tahap", "Volume", "Satuan", "Basis"],
+            "whatsapp_daily_losses": ["Segmen", "Dikirim", "Diterima", "Satuan"],
+            "whatsapp_daily_wells": ["Sumur", "Catatan", "Perubahan (BO)", "Durasi LOP (jam)"],
+            "whatsapp_daily_stocks": ["Lokasi / tangki", "Stok (BO)", "BS&W (%)", "Basis"],
+            "whatsapp_daily_quality": ["Tangki", "BS&W (%)"],
+            "whatsapp_daily_road_tanks": ["Arah / metode", "Volume (BO)", "Unit truk", "Basis"],
+        }
+        frame = pd.DataFrame(rows) if rows else pd.DataFrame(columns=empty_columns.get(key, []))
         return st.data_editor(
-            pd.DataFrame(rows), key=key, num_rows="dynamic", hide_index=True,
+            frame, key=key, num_rows="dynamic", hide_index=True,
             use_container_width=True,
         )
 
@@ -86,7 +106,7 @@ if payload:
     def records(frame: pd.DataFrame) -> list[dict]:
         return [] if frame is None or frame.empty else json.loads(frame.to_json(orient="records", date_format="iso"))
 
-    if st.button("Simpan laporan terverifikasi", type="primary", key="whatsapp_daily_save"):
+    if st.button("Simpan laporan terverifikasi", type="primary", key="whatsapp_daily_save", disabled=not source_unchanged):
         if not raw_message.strip():
             st.error("Pesan sumber kosong; laporan tidak disimpan.")
         else:
@@ -96,7 +116,7 @@ if payload:
                 "tank_quality": records(quality_df), "road_tanks": records(road_df),
             }
             try:
-                save_report(report_date, raw_message, saved_payload)
+                save_report(report_date, source_message, saved_payload)
                 st.success(f"Laporan tanggal {report_date:%d %B %Y} tersimpan di Supabase.")
                 for key in [
                     "whatsapp_daily_payload", "whatsapp_daily_date", "whatsapp_daily_review_date",

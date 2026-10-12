@@ -186,15 +186,15 @@ def parse_whatsapp_report(message: str) -> dict[str, Any]:
 
     well_rows = []
     low_match = re.search(
-        r"^\s*M[#-]\s*22\s*=\s*(\(?\s*-?\s*[\d.,]+)[^\r\n]*?(S/I\s+LOP\s+\d+\s*Jam)?",
+        r"^\s*M[#-]\s*22\s*=\s*(\(?\s*-?\s*[\d.,]+)([^\r\n]*)",
         message,
         re.IGNORECASE | re.MULTILINE,
     )
     if low_match:
-        hours = re.search(r"(\d+)\s*Jam", low_match.group(0), re.IGNORECASE)
+        hours = re.search(r"(\d+)\s*Jam", low_match.group(2), re.IGNORECASE)
         well_rows.append({
             "Sumur": "M-22",
-            "Catatan": "S/I LOP" if "S/I" in low_match.group(0).upper() else "Low vs kemarin",
+            "Catatan": "S/I LOP" if "S/I" in low_match.group(2).upper() else "Low vs kemarin",
             "Perubahan (BO)": parse_indonesian_number(low_match.group(1)),
             "Durasi LOP (jam)": int(hours.group(1)) if hours else None,
         })
