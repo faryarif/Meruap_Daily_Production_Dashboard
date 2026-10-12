@@ -4,13 +4,12 @@ from historical_etl import process_wds_files, to_excel_bytes, upload_wds_product
 
 
 def render_wds_uploader():
-    st.subheader("Drag and Drop Excel WDS")
-    st.caption("Drop multiple daily WDS reports here. The ETL extracts Date, Well, BO, BW, Gas, Total Injeksi bbls, and the daily Actual Production value, converts names such as M # 01 → M-01, and can upload the cleaned result to Supabase.")
     files = st.file_uploader(
-        "Drop hundreds of WDS Excel reports here",
+        "Drop multiple daily WDS reports here",
         type=["xlsx", "xls"],
         accept_multiple_files=True,
         key="wds_batch_uploader",
+        help="The ETL extracts Date, Well, BO, BW, Gas, Total Injeksi bbls, and Actual Production, and normalizes well names such as M # 01 to M-01.",
     )
     if not files:
         return
