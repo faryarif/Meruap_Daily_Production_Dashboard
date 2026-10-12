@@ -174,7 +174,7 @@ else:
         )
     month_rows = monthly_reports[monthly_reports["month_key"].eq(month_key)].copy()
     with days_col:
-        st.metric("Hari", f"{len(month_rows):,}")
+        st.caption(f"Hari laporan: **{len(month_rows):,}**")
 
     flow_rows, loss_rows, stock_rows, road_rows = [], [], [], []
     for _, report in month_rows.iterrows():
