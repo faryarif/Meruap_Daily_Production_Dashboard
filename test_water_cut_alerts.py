@@ -37,7 +37,19 @@ class WaterCutTests(unittest.TestCase):
         self.assertIsNone(result["severity"])
         rows = self.rows()
         rows[-1].update(OIL=0, WATER=0)
-        self.assertEqual(self.assess(rows)["WC Status"], "Invalid or missing current production")
+        self.assertEqual(self.assess(rows)["WC Status"], "No liquid production")
+
+    def test_current_record_reason_categories(self):
+        rows = self.rows()
+        rows.pop()
+        self.assertEqual(self.assess(rows)["WC Status"], "Missing record")
+        rows = self.rows()
+        rows[-1]["WATER"] = None
+        self.assertEqual(self.assess(rows)["WC Status"], "Incomplete oil/water data")
+        rows = self.rows()
+        rows.append(dict(rows[-1]))
+        self.assertEqual(self.assess(rows)["WC Status"], "Duplicate records")
+
     def test_sample_sigma_and_field_scope(self):
         rows = self.rows(97.2)
         for i, row in enumerate(rows[:-1]):
