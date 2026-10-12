@@ -13,15 +13,15 @@ from whatsapp_daily_report import parse_whatsapp_report, read_reports, save_repo
 st.set_page_config(page_title="WhatsApp Daily Report", page_icon="📋", layout="wide", initial_sidebar_state="collapsed")
 inject_styles(st)
 
-nav_daily, nav_monthly, nav_whatsapp = st.columns(3)
+nav_daily, nav_whatsapp, nav_monthly = st.columns(3)
 with nav_daily:
-    if st.button("Daily Production Dashboard", key="report_nav_daily", use_container_width=True):
+    if st.button("Laporan Produksi Harian", key="report_nav_daily", use_container_width=True):
         st.switch_page("app.py")
 with nav_monthly:
-    if st.button("Monthly Reconciliation", key="report_nav_monthly", use_container_width=True):
+    if st.button("Laporan Lifting Bulanan", key="report_nav_monthly", use_container_width=True):
         st.switch_page("pages/2_Monthly_Reconciliation.py")
 with nav_whatsapp:
-    if st.button("Laporan Harian WhatsApp", key="report_nav_whatsapp", use_container_width=True, type="primary"):
+    if st.button("Laporan Lifting Harian", key="report_nav_whatsapp", use_container_width=True, type="primary"):
         st.switch_page("pages/3_WhatsApp_Daily_Report.py")
 
 if st.session_state.pop("whatsapp_daily_reset_form", False):
