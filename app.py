@@ -186,11 +186,20 @@ elif water_cut_assessments:
     st.caption(f"Water-cut coverage: {assessed}/{len(water_cut_assessments)} wells assessed.")
     excluded = [
         {"Well": alias, "Reason": item["WC Status"], "Valid baseline days": item["Baseline Days"]}
-        for alias, item in water_cut_assessments.items() if item["WC Status"] != "Assessed"
+        for alias, item in water_cut_assessments.items()
+        if item["WC Status"] not in {"Assessed", "Current data valid"}
     ]
     if excluded:
-        with st.expander("Wells without a water-cut assessment"):
+        with st.expander("Water-cut data status and exclusions"):
             st.dataframe(pd.DataFrame(excluded), hide_index=True, use_container_width=True)
+    no_liquid = [
+        {"Well": alias, "Reason": item["WC Status"]}
+        for alias, item in water_cut_assessments.items()
+        if item["WC Status"] == "No liquid production"
+    ]
+    if no_liquid:
+        with st.expander(f"No liquid production ({len(no_liquid)})"):
+            st.dataframe(pd.DataFrame(no_liquid), hide_index=True, use_container_width=True)
 if well_alerts.empty:
     st.info("No alerts triggered by the available assessments for the selected date and field.")
 else:
