@@ -5,6 +5,7 @@ import json
 from datetime import date
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from styles import inject_styles
@@ -152,6 +153,187 @@ else:
     reports["report_date"] = pd.to_datetime(reports["report_date"], errors="coerce").dt.date
     reports["created_at"] = pd.to_datetime(reports["created_at"], errors="coerce")
     reports = reports.sort_values(["report_date", "created_at"], ascending=[False, False])
+
+    st.subheader("Grafik Bulanan")
+    st.caption(
+        "Tren harian memakai satu versi laporan terbaru untuk setiap tanggal, "
+        "agar revisi laporan tidak dihitung dua kali."
+    )
+    monthly_reports = (
+        reports.dropna(subset=["report_date"])
+        .sort_values(["report_date", "created_at"], ascending=[True, True])
+        .drop_duplicates(subset=["report_date"], keep="last")
+        .copy()
+    )
+    monthly_reports["month_key"] = pd.to_datetime(monthly_reports["report_date"]).dt.strftime("%Y-%m")
+    month_options = sorted(monthly_reports["month_key"].dropna().unique().tolist(), reverse=True)
+    month_names = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+    ]
+    month_key = st.selectbox(
+        "Bulan laporan",
+        month_options,
+        format_func=lambda value: f"{month_names[int(value[5:7]) - 1]} {value[:4]}",
+        key="whatsapp_month_chart_period",
+    )
+    month_rows = monthly_reports[monthly_reports["month_key"].eq(month_key)].copy()
+    st.metric("Hari dengan laporan", f"{len(month_rows):,}")
+
+    flow_rows, loss_rows, stock_rows, road_rows = [], [], [], []
+    for _, report in month_rows.iterrows():
+        report_day = pd.Timestamp(report["report_date"])
+        payload_data = report["payload"] if isinstance(report["payload"], dict) else {}
+
+        for item in payload_data.get("sot_flows", []):
+            value = pd.to_numeric(item.get("Volume"), errors="coerce")
+            if pd.notna(value):
+                flow_rows.append({
+                    "Tanggal": report_day,
+                    "Tahap": item.get("Tahap", "Tahap tidak diketahui"),
+                    "Volume (BO)": float(value),
+                })
+
+        for item in payload_data.get("loss_pairs", []):
+            sent = pd.to_numeric(item.get("Dikirim"), errors="coerce")
+            received = pd.to_numeric(item.get("Diterima"), errors="coerce")
+            if pd.notna(sent) and pd.notna(received):
+                loss_rows.append({
+                    "Tanggal": report_day,
+                    "Segmen": item.get("Segmen", "Segmen tidak diketahui"),
+                    "Selisih (BO)": float(sent - received),
+                })
+
+        for item in payload_data.get("tank_stocks", []):
+            value = pd.to_numeric(item.get("Stok (BO)"), errors="coerce")
+            if pd.notna(value):
+                stock_rows.append({
+                    "Tanggal": report_day,
+                    "Lokasi / tangki": item.get("Lokasi / tangki", "Lokasi tidak diketahui"),
+                    "Stok (BO)": float(value),
+                })
+
+        for item in payload_data.get("road_tanks", []):
+            value = pd.to_numeric(item.get("Volume (BO)"), errors="coerce")
+            if pd.notna(value):
+                road_rows.append({
+                    "Tanggal": report_day,
+                    "Arah / metode": item.get("Arah / metode", "Metode tidak diketahui"),
+                    "Volume (BO)": float(value),
+                })
+
+    flow_tab_month, loss_tab_month, stock_tab_month, road_tab_month = st.tabs(
+        ["Aliran SOT & lifting", "Loss / gain", "Stok tangki", "Road tank"]
+    )
+
+    def style_month_figure(fig):
+        fig.update_layout(
+            height=360,
+            margin=dict(l=10, r=10, t=20, b=10),
+            paper_bgcolor="#0b1220",
+            plot_bgcolor="#0b1220",
+            font=dict(color="#e2e8f0"),
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        )
+        fig.update_xaxes(title=None, gridcolor="#263144", tickformat="%d %b")
+        fig.update_yaxes(gridcolor="#263144")
+        return fig
+
+    with flow_tab_month:
+        flows_month = pd.DataFrame(flow_rows)
+        if flows_month.empty:
+            st.info("Belum ada angka aliran SOT/lifting untuk bulan ini.")
+        else:
+            stages = sorted(flows_month["Tahap"].dropna().unique().tolist())
+            preferred_stages = [
+                "OPS Terima STA-SRL",
+                "Terima di SPU BJB",
+                "Terima di PPP Allocation",
+                "Lifting quantity KM-3 Sei Gerong",
+            ]
+            selected_stages = st.multiselect(
+                "Tahap yang ditampilkan",
+                stages,
+                default=[stage for stage in preferred_stages if stage in stages],
+                key="whatsapp_month_flow_stages",
+            )
+            selected_flows = flows_month[flows_month["Tahap"].isin(selected_stages)]
+            if selected_flows.empty:
+                st.info("Pilih satu atau beberapa tahap untuk melihat tren.")
+            else:
+                fig = go.Figure()
+                for stage, series in selected_flows.groupby("Tahap"):
+                    series = series.sort_values("Tanggal")
+                    fig.add_trace(go.Scatter(
+                        x=series["Tanggal"],
+                        y=series["Volume (BO)"],
+                        name=stage,
+                        mode="lines+markers",
+                        connectgaps=False,
+                        hovertemplate="%{x|%d %b}<br>%{y:,.1f} BO<extra>%{fullData.name}</extra>",
+                    ))
+                fig.update_yaxes(title="Volume (BO)")
+                st.plotly_chart(style_month_figure(fig), use_container_width=True, config={"displayModeBar": False})
+
+    with loss_tab_month:
+        losses_month = pd.DataFrame(loss_rows)
+        if losses_month.empty:
+            st.info("Belum ada pasangan angka kirim-terima yang lengkap untuk bulan ini.")
+        else:
+            fig = go.Figure()
+            for segment, series in losses_month.groupby("Segmen"):
+                series = series.sort_values("Tanggal")
+                fig.add_trace(go.Scatter(
+                    x=series["Tanggal"],
+                    y=series["Selisih (BO)"],
+                    name=segment,
+                    mode="lines+markers",
+                    connectgaps=False,
+                    hovertemplate="%{x|%d %b}<br>%{y:+,.1f} BO<extra>%{fullData.name}</extra>",
+                ))
+            fig.add_hline(y=0, line_dash="dash", line_color="#94a3b8")
+            fig.update_yaxes(title="Loss (+) / gain (−), BO")
+            st.plotly_chart(style_month_figure(fig), use_container_width=True, config={"displayModeBar": False})
+
+    with stock_tab_month:
+        stocks_month = pd.DataFrame(stock_rows)
+        if stocks_month.empty:
+            st.info("Belum ada data stok tangki untuk bulan ini.")
+        else:
+            fig = go.Figure()
+            for location, series in stocks_month.groupby("Lokasi / tangki"):
+                series = series.sort_values("Tanggal")
+                fig.add_trace(go.Scatter(
+                    x=series["Tanggal"],
+                    y=series["Stok (BO)"],
+                    name=location,
+                    mode="lines+markers",
+                    connectgaps=False,
+                    hovertemplate="%{x|%d %b}<br>%{y:,.1f} BO<extra>%{fullData.name}</extra>",
+                ))
+            fig.update_yaxes(title="Stok (BO)")
+            st.plotly_chart(style_month_figure(fig), use_container_width=True, config={"displayModeBar": False})
+
+    with road_tab_month:
+        road_month = pd.DataFrame(road_rows)
+        if road_month.empty:
+            st.info("Belum ada data transfer/penerimaan road tank untuk bulan ini.")
+        else:
+            fig = go.Figure()
+            for method, series in road_month.groupby("Arah / metode"):
+                series = series.sort_values("Tanggal")
+                fig.add_trace(go.Scatter(
+                    x=series["Tanggal"],
+                    y=series["Volume (BO)"],
+                    name=method,
+                    mode="lines+markers",
+                    connectgaps=False,
+                    hovertemplate="%{x|%d %b}<br>%{y:,.1f} BO<extra>%{fullData.name}</extra>",
+                ))
+            fig.update_yaxes(title="Volume road tank (BO)")
+            st.plotly_chart(style_month_figure(fig), use_container_width=True, config={"displayModeBar": False})
+
     report_ids = reports["id"].tolist()
     selected_id = st.selectbox(
         "Pilih tanggal / versi laporan", report_ids,
