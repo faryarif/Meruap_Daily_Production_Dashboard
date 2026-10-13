@@ -197,7 +197,7 @@ else:
                 loss_rows.append({
                     "Tanggal": report_day,
                     "Segmen": item.get("Segmen", "Segmen tidak diketahui"),
-                    "Selisih (BO)": float(sent - received),
+                    "Selisih (BO)": float(received - sent),
                 })
 
         for item in payload_data.get("tank_stocks", []):
@@ -289,7 +289,7 @@ else:
                     hovertemplate="%{x|%d %b}<br>%{y:+,.1f} BO<extra>%{fullData.name}</extra>",
                 ))
             fig.add_hline(y=0, line_dash="dash", line_color="#94a3b8")
-            fig.update_yaxes(title="Loss (+) / gain (−), BO")
+            fig.update_yaxes(title="Loss (−) / gain (+), BO")
             st.plotly_chart(style_month_figure(fig), use_container_width=True, config={"displayModeBar": False})
 
     with stock_tab_month:
@@ -391,3 +391,12 @@ else:
         if not quality.empty:
             st.markdown("**BS&W tangki**")
             st.dataframe(quality, hide_index=True, use_container_width=True)
+    with tab_wells:
+        wells = pd.DataFrame(saved.get("well_notes", []))
+        if wells.empty:
+            st.info("Tidak ada catatan sumur yang berhasil diekstrak.")
+        else:
+            st.dataframe(wells, hide_index=True, use_container_width=True)
+    with tab_source:
+        st.caption("Pesan asli disimpan sebagai jejak sumber laporan.")
+        st.text_area("Pesan WhatsApp sumber", value=selected["source_message"], height=420, disabled=True)
