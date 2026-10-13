@@ -647,6 +647,7 @@ def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
         )
     )
     fig = _chart_layout(fig, "Transfer Loss Heatmap", "")
+    fig.update_yaxes(autorange="reversed", categoryorder="array", categoryarray=segment_order)
     return fig
 
 
