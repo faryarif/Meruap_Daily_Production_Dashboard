@@ -350,11 +350,15 @@ else:
         if flows.empty:
             st.info("Tidak ada data aliran SOT pada laporan ini.")
         else:
-            st.dataframe(flows, hide_index=True, use_container_width=True)
-            if "Volume" in flows.columns:
-                chart = flows.dropna(subset=["Volume"]).set_index("Tahap")[["Volume"]]
-                if not chart.empty:
-                    st.bar_chart(chart, use_container_width=True)
+            volume_values = pd.to_numeric(flows.get("Volume"), errors="coerce")
+            flow_display = pd.DataFrame({
+                "Tahap": flows.get("Tahap"),
+                "Volume (Barrel)": volume_values,
+            })
+            st.dataframe(flow_display, hide_index=True, use_container_width=True)
+            chart = flow_display.dropna(subset=["Volume (Barrel)"]).set_index("Tahap")[["Volume (Barrel)"]]
+            if not chart.empty:
+                st.bar_chart(chart, use_container_width=True)
         pairs = pd.DataFrame(saved.get("loss_pairs", []))
         if not pairs.empty:
             pairs["Dikirim"] = pd.to_numeric(pairs.get("Dikirim"), errors="coerce")
@@ -369,7 +373,8 @@ else:
                 else "Seimbang" if pd.notna(v) else "Belum lengkap"
             )
             st.markdown("**Analisis selisih transfer**")
-            st.dataframe(pairs, hide_index=True, use_container_width=True)
+            loss_columns = ["Segmen", "Dikirim", "Diterima", "Selisih (BO)", "Selisih (%)", "Interpretasi"]
+            st.dataframe(pairs[[column for column in loss_columns if column in pairs.columns]], hide_index=True, use_container_width=True)
     with tab_stock:
         stocks = pd.DataFrame(saved.get("tank_stocks", []))
         if stocks.empty:
