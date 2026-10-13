@@ -627,7 +627,7 @@ def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
         if not segment_order:
             segment_order = [item.segment for item in items]
         for item in items:
-            rows.append({"Month": record["report_month"], "Segment": item.segment, "Loss %": item.loss_pct})
+            rows.append({"Month": record["report_month"], "Segment": item.segment, "Loss %": -item.loss_pct})
     source = pd.DataFrame(rows)
     if source.empty:
         return _chart_layout(go.Figure(), "Transfer Loss Heatmap", "")
@@ -638,12 +638,12 @@ def make_loss_heatmap(df: pd.DataFrame) -> go.Figure:
             z=pivot.values,
             x=[pd.Timestamp(value).strftime("%b %Y") for value in pivot.columns],
             y=pivot.index,
-            colorscale=[[0, "#16a34a"], [0.5, "#facc15"], [1, "#dc2626"]],
+            colorscale=[[0, "#dc2626"], [0.5, "#facc15"], [1, "#16a34a"]],
             zmid=0,
             text=text,
             texttemplate="%{text}",
             hovertemplate="%{y}<br>%{x}<br>%{z:.2f}%<extra></extra>",
-            colorbar={"title": "Loss %"},
+            colorbar={"title": "Loss (−) / gain (+) %"},
         )
     )
     fig = _chart_layout(fig, "Transfer Loss Heatmap", "")
