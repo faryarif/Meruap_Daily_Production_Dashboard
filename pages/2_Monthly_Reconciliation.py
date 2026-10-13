@@ -46,80 +46,75 @@ with nav_whatsapp:
         st.switch_page("pages/3_WhatsApp_Daily_Report.py")
 
 
-st.title("Monthly Production & Lifting")
-st.caption(
-    "Monthly reconciliation from the field through Block Stations, STA, Bajubang, Tempino, "
-    "and official lifting received at KM-3 S. Gerong."
-)
+header_slot = st.container()
 
 preview_df = pd.DataFrame()
-with st.expander("Upload Monthly Lifting Recap", expanded=False):
-    st.caption(
-        "Upload the monthly recap workbook in .xls or .xlsx format. The page reads the yearly and RC sheets, "
-        "shows a preview, and only writes to Supabase after confirmation."
-    )
-    uploaded = st.file_uploader(
-        "Drop the monthly production and lifting workbook here",
-        type=["xls", "xlsx"],
-        key="monthly_lifting_uploader",
-    )
-    if uploaded is not None:
-        try:
-            with st.spinner("Reading monthly reconciliation data..."):
-                preview_df, workbook_warnings = parse_lifting_workbook(uploaded)
-            st.session_state["monthly_lifting_preview"] = preview_df
-            actual_count = int(preview_df["reporting_status"].eq("Actual").sum())
-            planned_count = int(preview_df["reporting_status"].eq("Planned").sum())
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Months detected", f"{len(preview_df):,}")
-            c2.metric("Actual months", f"{actual_count:,}")
-            c3.metric("Planned/unreported", f"{planned_count:,}")
-            if planned_count:
-                st.info("Planned or unreported months are stored with their status and excluded from actual KPIs and loss trends.")
-            for warning in workbook_warnings:
-                st.warning(warning)
-            display_columns = [
-                "report_month",
-                "reporting_status",
-                "rc_bopd",
-                "rc_volume_bbl",
-                "field_production_bbl",
-                "rc_pumping_net_bbl",
-                "s_gerong_received_bbl",
-            ]
-            preview = preview_df[display_columns].copy()
-            preview["report_month"] = preview["report_month"].dt.strftime("%b %Y")
-            st.dataframe(
-                preview,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "report_month": "Month",
-                    "reporting_status": "Status",
-                    "rc_bopd": st.column_config.NumberColumn("RC Actual (BOPD)", format="%.1f"),
-                    "rc_volume_bbl": st.column_config.NumberColumn("RC Actual Volume", format="%.1f"),
-                    "field_production_bbl": st.column_config.NumberColumn("Field Production", format="%.1f"),
-                    "rc_pumping_net_bbl": st.column_config.NumberColumn("Pumping Net", format="%.1f"),
-                    "s_gerong_received_bbl": st.column_config.NumberColumn("Received S. Gerong", format="%.1f"),
-                },
-            )
-            confirmed = st.checkbox(
-                "I reviewed the preview and want to update monthly reconciliation data.",
-                key="confirm_monthly_lifting_upload",
-            )
-            if st.button(
-                "Upload Monthly Reconciliation to Supabase",
-                type="primary",
-                disabled=not confirmed,
-                key="upload_monthly_lifting_button",
-            ):
-                with st.spinner("Saving monthly reconciliation..."):
-                    rows = upload_monthly_reconciliation(preview_df)
-                st.success(f"Saved {rows:,} monthly reconciliation records.")
-                st.cache_data.clear()
-                st.rerun()
-        except Exception as exc:
-            st.error(f"The workbook could not be processed: {exc}")
+st.caption(
+    "Upload the monthly recap workbook in .xls or .xlsx format. The page reads the yearly and RC sheets, "
+    "shows a preview, and only writes to Supabase after confirmation."
+)
+uploaded = st.file_uploader(
+    "Drop the monthly production and lifting workbook here",
+    type=["xls", "xlsx"],
+    key="monthly_lifting_uploader",
+)
+if uploaded is not None:
+    try:
+        with st.spinner("Reading monthly reconciliation data..."):
+            preview_df, workbook_warnings = parse_lifting_workbook(uploaded)
+        st.session_state["monthly_lifting_preview"] = preview_df
+        actual_count = int(preview_df["reporting_status"].eq("Actual").sum())
+        planned_count = int(preview_df["reporting_status"].eq("Planned").sum())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Months detected", f"{len(preview_df):,}")
+        c2.metric("Actual months", f"{actual_count:,}")
+        c3.metric("Planned/unreported", f"{planned_count:,}")
+        if planned_count:
+            st.info("Planned or unreported months are stored with their status and excluded from actual KPIs and loss trends.")
+        for warning in workbook_warnings:
+            st.warning(warning)
+        display_columns = [
+            "report_month",
+            "reporting_status",
+            "rc_bopd",
+            "rc_volume_bbl",
+            "field_production_bbl",
+            "rc_pumping_net_bbl",
+            "s_gerong_received_bbl",
+        ]
+        preview = preview_df[display_columns].copy()
+        preview["report_month"] = preview["report_month"].dt.strftime("%b %Y")
+        st.dataframe(
+            preview,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "report_month": "Month",
+                "reporting_status": "Status",
+                "rc_bopd": st.column_config.NumberColumn("RC Actual (BOPD)", format="%.1f"),
+                "rc_volume_bbl": st.column_config.NumberColumn("RC Actual Volume", format="%.1f"),
+                "field_production_bbl": st.column_config.NumberColumn("Field Production", format="%.1f"),
+                "rc_pumping_net_bbl": st.column_config.NumberColumn("Pumping Net", format="%.1f"),
+                "s_gerong_received_bbl": st.column_config.NumberColumn("Received S. Gerong", format="%.1f"),
+            },
+        )
+        confirmed = st.checkbox(
+            "I reviewed the preview and want to update monthly reconciliation data.",
+            key="confirm_monthly_lifting_upload",
+        )
+        if st.button(
+            "Upload Monthly Reconciliation to Supabase",
+            type="primary",
+            disabled=not confirmed,
+            key="upload_monthly_lifting_button",
+        ):
+            with st.spinner("Saving monthly reconciliation..."):
+                rows = upload_monthly_reconciliation(preview_df)
+            st.success(f"Saved {rows:,} monthly reconciliation records.")
+            st.cache_data.clear()
+            st.rerun()
+    except Exception as exc:
+        st.error(f"The workbook could not be processed: {exc}")
 
 try:
     stored_df = read_monthly_reconciliation()
@@ -133,6 +128,8 @@ if preview_df.empty:
 
 data = normalize_monthly_data(preview_df if not preview_df.empty else stored_df)
 if data.empty:
+    with header_slot:
+        st.title("Monthly Production & Lifting")
     if load_error:
         st.warning(
             "Monthly reconciliation data is not available yet. Upload the first workbook to preview it, then save it "
@@ -144,21 +141,27 @@ if data.empty:
 
 actual = data[data["reporting_status"].eq("Actual")].copy()
 if actual.empty:
+    with header_slot:
+        st.title("Monthly Production & Lifting")
     st.info("The workbook contains no months marked as Actual yet.")
     st.stop()
 
 year_options = sorted(actual["report_month"].dt.year.unique(), reverse=True)
-filter_col, month_col = st.columns([1, 2])
-with filter_col:
-    selected_year = st.selectbox("Year", year_options, index=0)
-year_data = actual[actual["report_month"].dt.year.eq(selected_year)]
-month_options = list(year_data["report_month"].sort_values(ascending=False))
-with month_col:
-    selected_month = st.selectbox(
-        "Reconciliation month",
-        month_options,
-        format_func=lambda value: pd.Timestamp(value).strftime("%B %Y"),
-    )
+with header_slot:
+    title_col, filter_col, month_col = st.columns([3, 1, 2], vertical_alignment="center")
+    with title_col:
+        st.title("Monthly Production & Lifting")
+    with filter_col:
+        selected_year = st.selectbox("Year", year_options, index=0, key="monthly_reconciliation_year")
+    year_data = actual[actual["report_month"].dt.year.eq(selected_year)]
+    month_options = list(year_data["report_month"].sort_values(ascending=False))
+    with month_col:
+        selected_month = st.selectbox(
+            "Reconciliation month",
+            month_options,
+            format_func=lambda value: pd.Timestamp(value).strftime("%B %Y"),
+            key="monthly_reconciliation_month",
+        )
 
 selected = year_data[year_data["report_month"].eq(selected_month)].iloc[0]
 field_production = float(selected["field_production_bbl"] or 0)
