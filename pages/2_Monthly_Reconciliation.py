@@ -233,7 +233,7 @@ with losses_tab:
     )
     st.plotly_chart(make_loss_heatmap(actual), use_container_width=True, config={"displayModeBar": False})
     st.caption(
-        "Positive values are shown as Loss. Negative values are shown as Gain. The field-to-lifting gap also includes "
-        "stock movement and storage reconciliation, so it is not treated as transfer loss by itself."
+        "Negative values indicate Loss (red); positive values indicate Gain (green). The field-to-lifting gap also "
+        "includes stock movement and storage reconciliation, so it is not treated as transfer loss by itself."
     )
 
