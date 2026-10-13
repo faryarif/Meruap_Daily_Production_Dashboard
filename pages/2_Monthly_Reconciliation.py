@@ -49,14 +49,28 @@ with nav_whatsapp:
 header_slot = st.container()
 
 preview_df = pd.DataFrame()
-st.caption(
-    "Upload the monthly recap workbook in .xls or .xlsx format. The page reads the yearly and RC sheets, "
-    "shows a preview, and only writes to Supabase after confirmation."
+st.markdown(
+    """
+    <style>
+    div.st-key-monthly_lifting_uploader [data-testid="stFileUploaderDropzoneInstructions"] > div:first-child {
+        display: none !important;
+    }
+    div.st-key-monthly_lifting_uploader [data-testid="stFileUploaderDropzoneInstructions"]::before {
+        content: "Drop the monthly production and lifting workbook here";
+        display: block;
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 uploaded = st.file_uploader(
     "Drop the monthly production and lifting workbook here",
     type=["xls", "xlsx"],
     key="monthly_lifting_uploader",
+    label_visibility="collapsed",
 )
 if uploaded is not None:
     try:
