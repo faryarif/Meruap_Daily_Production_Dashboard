@@ -380,23 +380,14 @@ else:
         if stocks.empty:
             st.info("Tidak ada angka stok tangki pada laporan ini.")
         else:
-            st.dataframe(stocks, hide_index=True, use_container_width=True)
+            st.dataframe(stocks.drop(columns=["Basis"], errors="ignore"), hide_index=True, use_container_width=True)
         road = pd.DataFrame(saved.get("road_tanks", []))
         if road.empty:
             st.info("Tidak ada transfer road tank pada laporan ini.")
         else:
             st.markdown("**Transfer dan penerimaan road tank**")
-            st.dataframe(road, hide_index=True, use_container_width=True)
+            st.dataframe(road.drop(columns=["Basis"], errors="ignore"), hide_index=True, use_container_width=True)
         quality = pd.DataFrame(saved.get("tank_quality", []))
         if not quality.empty:
             st.markdown("**BS&W tangki**")
             st.dataframe(quality, hide_index=True, use_container_width=True)
-    with tab_wells:
-        wells = pd.DataFrame(saved.get("well_notes", []))
-        if wells.empty:
-            st.info("Tidak ada catatan sumur yang berhasil diekstrak.")
-        else:
-            st.dataframe(wells, hide_index=True, use_container_width=True)
-    with tab_source:
-        st.caption("Pesan asli disimpan sebagai jejak sumber laporan.")
-        st.text_area("Pesan WhatsApp sumber", value=selected["source_message"], height=420, disabled=True)
