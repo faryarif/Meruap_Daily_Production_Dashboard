@@ -179,7 +179,7 @@ c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{chang
 st.markdown(
     """
     <style>
-    div.st-key-dashboard_ai_popup { position: fixed; right: 1.1rem; bottom: 1.1rem; z-index: 10000; width: auto; }
+    div.st-key-dashboard_ai_popup { position: fixed; left: 50%; bottom: 1.1rem; transform: translateX(-50%); z-index: 10000; width: auto; }
     div.st-key-dashboard_ai_popup > div[data-testid="stPopover"] > button { border-radius: 999px; min-height: 3rem; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
     </style>
     """,
