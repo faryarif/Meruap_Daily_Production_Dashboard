@@ -175,6 +175,49 @@ c4.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", 
 c5.metric("Total Water Injection", f"{kpis['total_injection']:,} BWPD", f"{changes['injection_change']:+,} BWPD vs yesterday" if changes["injection_change"] is not None else None)
 c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
 
+# Floating UI preview: local demo only; no dashboard data is sent to an AI service.
+st.markdown(
+    """
+    <style>
+    div.st-key-dashboard_ai_popup { position: fixed; right: 1.1rem; bottom: 1.1rem; z-index: 10000; width: auto; }
+    div.st-key-dashboard_ai_popup > div[data-testid="stPopover"] > button { border-radius: 999px; min-height: 3rem; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+with st.popover(
+    "Tanya AI",
+    icon=":material/smart_toy:",
+    type="primary",
+    key="dashboard_ai_popup",
+    width="large",
+):
+    st.caption("Mode uji tampilan — belum tersambung ke AI atau data dashboard.")
+    st.info("Pesan hanya diproses di sesi ini. Tidak dikirim ke OpenAI atau Supabase.")
+    demo_messages = st.session_state.setdefault("dashboard_ai_demo_messages", [])
+    for demo_message in demo_messages[-6:]:
+        with st.chat_message(demo_message["role"]):
+            st.markdown(demo_message["content"])
+
+    with st.form("dashboard_ai_demo_form", clear_on_submit=True):
+        demo_question = st.text_input(
+            "Tulis pertanyaan",
+            placeholder="Contoh: apa yang bisa saya tanyakan?",
+            label_visibility="collapsed",
+        )
+        demo_submitted = st.form_submit_button("Kirim", type="primary", use_container_width=True)
+
+    if demo_submitted and demo_question.strip():
+        demo_messages.append({"role": "user", "content": demo_question.strip()})
+        demo_messages.append({
+            "role": "assistant",
+            "content": (
+                "Pop-up chat sudah berjalan. Ini masih jawaban contoh; "
+                "analisis data produksi akan diaktifkan setelah Anda memilih dan menyetujui koneksi AI."
+            ),
+        })
+        st.rerun()
+
 pie_col, map_col = st.columns([1, 1.3])
 with pie_col:
     st.subheader("Status & Field Totals")
