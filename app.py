@@ -190,7 +190,6 @@ with st.popover(
     icon=":material/smart_toy:",
     type="primary",
     key="dashboard_ai_popup",
-    width="large",
 ):
     st.caption("Mode uji tampilan — belum tersambung ke AI atau data dashboard.")
     st.info("Pesan hanya diproses di sesi ini. Tidak dikirim ke OpenAI atau Supabase.")
