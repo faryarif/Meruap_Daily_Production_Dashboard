@@ -18,7 +18,7 @@ def make_well_map(filtered_df):
         lat="latitude",
         lon="longitude",
         color="status",
-        color_discrete_map=STATUS_COLORS,
+        color_discrete_map={**STATUS_COLORS, "Oil": "#166534"},
         size="marker_size",
         size_max=55,
         hover_name="ALIAS",
