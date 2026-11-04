@@ -109,32 +109,15 @@ def read_locations():
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def read_decline_window(end_date):
-    """Bounded history, raw nulls preserved; never load the entire production table."""
+def read_decline_window(end_date, aliases=None):
+    """Load bounded AllLayer history in one database RPC call."""
     end = pd.Timestamp(end_date).normalize()
     start = end - pd.Timedelta(days=55)
-    rows, offset = [], 0
-    while True:
-        response = (
-            get_supabase().table("ProdWellBasiss")
-            .select("date,ALIAS,UNIQUEID,OIL,WATER", count="exact")
-            .gte("date", start.strftime("%Y-%m-%d"))
-            .lte("date", end.strftime("%Y-%m-%d"))
-            .like("UNIQUEID", "M-%:AllLayer")
-            .order("date").order("ALIAS").order("UNIQUEID")
-            .range(offset, offset + 499).execute()
-        )
-        page = response.data or []
-        rows.extend(page)
-        offset += len(page)
-        total = response.count
-        if total is not None and offset >= total:
-            break
-        if not page:
-            if total is not None and offset < total:
-                raise RuntimeError("Incomplete production history response; please reload the review.")
-            break
-        if offset >= 20000:
-            raise RuntimeError("Review history exceeded the safety limit; narrow the data scope.")
-    return pd.DataFrame(rows, columns=["date", "ALIAS", "UNIQUEID", "OIL", "WATER"])
-
+    params = {
+        "p_start_date": start.strftime("%Y-%m-%d"),
+        "p_end_date": end.strftime("%Y-%m-%d"),
+    }
+    if aliases is not None:
+        params["p_aliases"] = list(aliases)
+    df = _rpc_df("dashboard_water_cut_history", params)
+    return df.reindex(columns=["date", "ALIAS", "UNIQUEID", "OIL", "WATER"])
