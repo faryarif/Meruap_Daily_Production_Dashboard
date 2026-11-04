@@ -142,18 +142,7 @@ previous_date_str = (pd.Timestamp(selected_date) - pd.Timedelta(days=1)).strftim
 previous_all_layer_wells = filter_by_field(read_all_layer_snapshot(previous_date_str), field_filter)
 water_cut_assessments = {}
 water_cut_load_failed = False
-try:
-    alert_history = read_decline_window(
-        selected_date_str,
-        tuple(sorted(all_layer_wells["ALIAS"].dropna().astype(str).unique())),
-    )
-    water_cut_assessments = assess_water_cut(
-        alert_history.to_dict("records"), selected_date_str,
-        all_layer_wells["ALIAS"].dropna().unique(),
-    )
-except Exception:
-    water_cut_load_failed = True
-well_alerts = calculate_well_alerts(all_layer_wells, previous_all_layer_wells, water_cut_assessments)
+
 kpis = calculate_kpis(filtered)
 changes = calculate_daily_changes(trend_df, selected_date)
 missing_aliases = missing_coordinate_aliases(display_wells)
@@ -370,7 +359,35 @@ st.caption(
     "Effective sigma has a 0.1 percentage-point floor. "
     "Zero-liquid, invalid and duplicate well/day records are excluded."
 )
-if water_cut_load_failed:
+load_water_cut_review = st.checkbox(
+    "Load water-cut review",
+    value=False,
+    key="show_water_cut_review",
+)
+if load_water_cut_review:
+    try:
+        with st.spinner("Loading water-cut history..."):
+            alert_history = read_decline_window(
+                selected_date_str,
+                tuple(sorted(all_layer_wells["ALIAS"].dropna().astype(str).unique())),
+            )
+        water_cut_assessments = assess_water_cut(
+            alert_history.to_dict("records"),
+            selected_date_str,
+            all_layer_wells["ALIAS"].dropna().unique(),
+        )
+    except Exception:
+        water_cut_load_failed = True
+
+well_alerts = calculate_well_alerts(
+    all_layer_wells, previous_all_layer_wells, water_cut_assessments
+)
+if not load_water_cut_review:
+    st.info(
+        "Water-cut review is not loaded. Oil alerts remain available; "
+        "select the box above to include water-cut checks."
+    )
+elif water_cut_load_failed:
     st.warning("Water-cut assessment unavailable: history could not be loaded. Oil alerts remain available.")
 elif water_cut_assessments:
     assessed = sum(item["WC Status"] == "Assessed" for item in water_cut_assessments.values())
