@@ -143,7 +143,10 @@ previous_all_layer_wells = filter_by_field(read_all_layer_snapshot(previous_date
 water_cut_assessments = {}
 water_cut_load_failed = False
 try:
-    alert_history = read_decline_window(selected_date_str)
+    alert_history = read_decline_window(
+        selected_date_str,
+        tuple(sorted(all_layer_wells["ALIAS"].dropna().astype(str).unique())),
+    )
     water_cut_assessments = assess_water_cut(
         alert_history.to_dict("records"), selected_date_str,
         all_layer_wells["ALIAS"].dropna().unique(),
