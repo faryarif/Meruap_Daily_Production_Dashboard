@@ -110,7 +110,7 @@ def read_locations():
 
 @st.cache_data(ttl=300, show_spinner=False)
 def read_decline_window(end_date, aliases=None):
-    """Load bounded AllLayer history in one database RPC call."""
+    """Load bounded AllLayer history in one compact database RPC call."""
     end = pd.Timestamp(end_date).normalize()
     start = end - pd.Timedelta(days=55)
     params = {
@@ -119,5 +119,20 @@ def read_decline_window(end_date, aliases=None):
     }
     if aliases is not None:
         params["p_aliases"] = list(aliases)
-    df = _rpc_df("dashboard_water_cut_history", params)
-    return df.reindex(columns=["date", "ALIAS", "UNIQUEID", "OIL", "WATER"])
+
+    response = get_supabase().rpc("dashboard_water_cut_history_compact", params).execute()
+    result = response.data or []
+    history = result[0].get("history", []) if result else []
+    if isinstance(history, str):
+        import json
+        history = json.loads(history)
+
+    rows = []
+    for item in history or []:
+        record = {
+            key: item.get(key)
+            for key in ["date", "ALIAS", "UNIQUEID", "OIL", "WATER"]
+        }
+        rows.extend([record] * max(1, int(item.get("row_count") or 1)))
+
+    return pd.DataFrame(rows, columns=["date", "ALIAS", "UNIQUEID", "OIL", "WATER"])
