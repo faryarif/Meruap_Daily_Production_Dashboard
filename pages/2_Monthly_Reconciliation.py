@@ -5,6 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from access_control import require_access
+
 from constants import APP_TITLE, PAGE_ICON
 from monthly_reconciliation import (
     loss_segment_frame,
@@ -29,6 +31,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+require_access()
 inject_styles(st)
 
 nav_daily, nav_whatsapp, nav_monthly = st.columns(3)
