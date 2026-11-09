@@ -35,6 +35,9 @@ Create `.streamlit/secrets.toml` with your Supabase project URL and keys:
 url = "https://YOUR_PROJECT_REF.supabase.co"
 key = "YOUR_DASHBOARD_ACCESS_KEY"
 service_role_key = "YOUR_SERVER_SIDE_SERVICE_ROLE_KEY"
+
+[access]
+id = "YOUR_LONG_RANDOM_ACCESS_ID"
 ```
 
 The dashboard uses `supabase.url` and `supabase.key` for its read client. Upload and report-saving operations use `supabase.service_role_key` server-side. Keep all keys private: do not commit `secrets.toml`, put a service-role key in client-side code, or share it in screenshots or logs.
@@ -44,6 +47,10 @@ Start the app:
 ```bash
 streamlit run app.py
 ```
+
+## Dashboard access
+
+The app requires a shared access ID on every page, including direct page links. Configure it in Streamlit Community Cloud under **App settings → Secrets**, or in local `.streamlit/secrets.toml` as shown above. Do not commit the real ID to GitHub. Anyone who obtains the ID can access the app, so share it only with intended viewers.
 
 ## Supabase setup
 
