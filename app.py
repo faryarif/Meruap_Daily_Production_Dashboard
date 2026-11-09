@@ -2,6 +2,7 @@
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+from access_control import require_access
 from charts import make_well_history_multi_fig, make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_decline_window, read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
@@ -86,6 +87,7 @@ def calculate_well_alerts(current_df, previous_df, water_cut_assessments):
     )
 
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
+require_access()
 inject_styles(st)
 
 nav_daily, nav_whatsapp, nav_monthly = st.columns(3)
