@@ -8,10 +8,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from access_control import require_access
+
 from styles import inject_styles
 from whatsapp_daily_report import parse_whatsapp_report, read_reports, save_report
 
 st.set_page_config(page_title="WhatsApp Daily Report", page_icon="📋", layout="wide", initial_sidebar_state="collapsed")
+require_access()
 inject_styles(st)
 
 nav_daily, nav_whatsapp, nav_monthly = st.columns(3)
