@@ -33,7 +33,7 @@ def _render_brand():
           <img src="data:image/png;base64,{MERUAP_LOGO_BASE64}" alt="Meruap logo">
           <div>
             <div class="meruap-brand-name">MERUAP</div>
-            <div class="meruap-brand-subtitle">Production Dashboard</div>
+            <div class="meruap-brand-subtitle">Management Dashboard</div>
           </div>
         </div>
         """,
@@ -55,7 +55,7 @@ def render_app_header(active_page):
             '<div><div style="color:#fb923c;font-weight:800;letter-spacing:.04em;'
             'font-size:1.08rem;line-height:1.2">MERUAP</div>'
             '<div style="color:#94a3b8;font-size:.63rem;letter-spacing:.1em;'
-            'text-transform:uppercase">Production Dashboard</div></div></div>',
+            'text-transform:uppercase">Management Dashboard</div></div></div>',
             unsafe_allow_html=True,
         )
 
