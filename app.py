@@ -89,6 +89,7 @@ def calculate_well_alerts(current_df, previous_df, water_cut_assessments):
 
 st.set_page_config(page_title=APP_TITLE, page_icon=PAGE_ICON, layout="wide", initial_sidebar_state="collapsed")
 require_access()
+inject_styles(st)
 render_app_header("daily")
 
 ily_Report.py")
