@@ -60,9 +60,9 @@ def render_app_header(active_page):
         )
 
     nav_items = [
-        (daily_col, "Laporan Produksi Harian", "daily", "app.py"),
-        (whatsapp_col, "Laporan Lifting Harian", "whatsapp", "pages/3_WhatsApp_Daily_Report.py"),
-        (monthly_col, "Laporan Lifting Bulanan", "monthly", "pages/2_Monthly_Reconciliation.py"),
+        (daily_col, "Daily Production Report", "daily", "app.py"),
+        (whatsapp_col, "Daily Lifting Report", "whatsapp", "pages/3_WhatsApp_Daily_Report.py"),
+        (monthly_col, "Monthly Lifting Report", "monthly", "pages/2_Monthly_Reconciliation.py"),
     ]
     for column, label, page_key, target in nav_items:
         with column:
