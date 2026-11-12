@@ -47,17 +47,17 @@ def render_app_header(active_page):
         [2.15, 1.7, 1.8, 1.8], vertical_alignment="center", gap="small"
     )
     with brand_col:
-        logo_col, name_col = st.columns([0.65, 3.5], vertical_alignment="center", gap="small")
-        with logo_col:
-            st.image(MERUAP_LOGO, width=42)
-        with name_col:
-            st.markdown(
-                '<div style="color:#fb923c;font-weight:800;letter-spacing:.04em;'
-                'font-size:1.08rem;line-height:1.2">MERUAP</div>'
-                '<div style="color:#94a3b8;font-size:.63rem;letter-spacing:.1em;'
-                'text-transform:uppercase">Production Dashboard</div>',
-                unsafe_allow_html=True,
-            )
+        st.markdown(
+            f'<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">'
+            f'<img src="data:image/png;base64,{MERUAP_LOGO_BASE64}" '
+            'alt="Meruap logo" style="width:42px;height:42px;object-fit:contain;'
+            'padding:2px;border-radius:50%;background:#fff;box-sizing:border-box">'
+            '<div><div style="color:#fb923c;font-weight:800;letter-spacing:.04em;'
+            'font-size:1.08rem;line-height:1.2">MERUAP</div>'
+            '<div style="color:#94a3b8;font-size:.63rem;letter-spacing:.1em;'
+            'text-transform:uppercase">Production Dashboard</div></div></div>',
+            unsafe_allow_html=True,
+        )
 
     nav_items = [
         (daily_col, "Laporan Produksi Harian", "daily", "app.py"),
