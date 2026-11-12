@@ -18,7 +18,6 @@ require_access()
 inject_styles(st)
 render_app_header("whatsapp")
 
-Daily_Report.py")
 
 if st.session_state.pop("whatsapp_daily_reset_form", False):
     for key in [
