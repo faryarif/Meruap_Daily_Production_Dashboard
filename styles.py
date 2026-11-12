@@ -3,6 +3,7 @@ APP_CSS = """
 .stApp { background-color: #0b1220; color: #e2e8f0; }
 [data-testid="stMetric"] { background-color: #141d2e; border: 1px solid #263144; border-radius: 10px; padding: 14px 16px; }
 [data-testid="stMetricLabel"] { color: #64748b; }
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] > div { font-size: 1.45rem !important; line-height: 1.15; }
 section[data-testid="stSidebar"] { background-color: #0f1729; }
 h1, h2, h3 { color: #e2e8f0 !important; }
 .block-container { padding-top: 4.5rem; }
