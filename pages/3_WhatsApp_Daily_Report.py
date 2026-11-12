@@ -15,6 +15,7 @@ from whatsapp_daily_report import parse_whatsapp_report, read_reports, save_repo
 
 st.set_page_config(page_title="WhatsApp Daily Report", page_icon="📋", layout="wide", initial_sidebar_state="collapsed")
 require_access()
+inject_styles(st)
 render_app_header("whatsapp")
 
 Daily_Report.py")
