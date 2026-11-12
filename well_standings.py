@@ -45,15 +45,6 @@ def render_well_standings(wells, report_date=None, field="All"):
     ).reset_index(drop=True)
     ranked.insert(0, "Rank", range(1, len(ranked) + 1))
 
-    leader = ranked.iloc[0]
-    leader_name = str(leader.get("ALIAS", "—"))
-    leader_oil = _number(leader.get("OIL"))
-    leader_value = f"{leader_oil:,.1f} BOPD" if leader_oil is not None else "—"
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Ranked wells", f"{len(ranked):,}")
-    c2.metric("Top oil producer", leader_name)
-    c3.metric("Highest oil rate", leader_value)
     caption_parts = []
     if report_date:
         caption_parts.append(f"Report Date: {report_date}")
