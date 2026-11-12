@@ -3,9 +3,47 @@ import hmac
 
 import streamlit as st
 
+from meruap_brand import MERUAP_LOGO_BASE64
+
+
+def _render_brand():
+    st.markdown(
+        f"""
+        <style>
+        .meruap-brand-header {{
+            display: flex; align-items: center; gap: 12px;
+            padding: 2px 0 12px; margin-bottom: 10px;
+            border-bottom: 1px solid #263144;
+        }}
+        .meruap-brand-header img {{
+            display: block; width: 46px; height: 46px; object-fit: contain;
+            padding: 2px; border-radius: 50%; background: #fff;
+            box-sizing: border-box;
+        }}
+        .meruap-brand-name {{
+            color: #fb923c; font-size: 1.2rem; line-height: 1.2;
+            font-weight: 800; letter-spacing: .04em;
+        }}
+        .meruap-brand-subtitle {{
+            color: #94a3b8; font-size: .68rem; letter-spacing: .12em;
+            text-transform: uppercase;
+        }}
+        </style>
+        <div class="meruap-brand-header">
+          <img src="data:image/png;base64,{MERUAP_LOGO_BASE64}" alt="Meruap logo">
+          <div>
+            <div class="meruap-brand-name">MERUAP</div>
+            <div class="meruap-brand-subtitle">Production Dashboard</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 def require_access():
     """Require the shared access ID before rendering any dashboard page."""
+    _render_brand()
     access_config = st.secrets.get("access", {})
     expected_id = access_config.get("id") if hasattr(access_config, "get") else None
 
