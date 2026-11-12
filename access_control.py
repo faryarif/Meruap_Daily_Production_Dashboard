@@ -47,7 +47,7 @@ def render_app_header(active_page):
         [2.15, 1.7, 1.8, 1.8], vertical_alignment="center", gap="small"
     )
     with brand_col:
-        logo_col, name_col = st.columns([0.9, 3.5], vertical_alignment="center", gap="small")
+        logo_col, name_col = st.columns([0.65, 3.5], vertical_alignment="center", gap="small")
         with logo_col:
             st.image(MERUAP_LOGO, width=42)
         with name_col:
