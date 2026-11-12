@@ -8,25 +8,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from access_control import require_access
+from access_control import render_app_header, require_access
 
 from styles import inject_styles
 from whatsapp_daily_report import parse_whatsapp_report, read_reports, save_report
 
 st.set_page_config(page_title="WhatsApp Daily Report", page_icon="📋", layout="wide", initial_sidebar_state="collapsed")
 require_access()
-inject_styles(st)
+render_app_header("whatsapp")
 
-nav_daily, nav_whatsapp, nav_monthly = st.columns(3)
-with nav_daily:
-    if st.button("Laporan Produksi Harian", key="report_nav_daily", use_container_width=True):
-        st.switch_page("app.py")
-with nav_monthly:
-    if st.button("Laporan Lifting Bulanan", key="report_nav_monthly", use_container_width=True):
-        st.switch_page("pages/2_Monthly_Reconciliation.py")
-with nav_whatsapp:
-    if st.button("Laporan Lifting Harian", key="report_nav_whatsapp", use_container_width=True, type="primary"):
-        st.switch_page("pages/3_WhatsApp_Daily_Report.py")
+Daily_Report.py")
 
 if st.session_state.pop("whatsapp_daily_reset_form", False):
     for key in [
