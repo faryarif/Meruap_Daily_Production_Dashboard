@@ -92,7 +92,6 @@ require_access()
 inject_styles(st)
 render_app_header("daily")
 
-ily_Report.py")
 
 
 
