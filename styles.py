@@ -6,7 +6,7 @@ APP_CSS = """
 [data-testid="stMetricValue"], [data-testid="stMetricValue"] > div { font-size: 1.45rem !important; line-height: 1.15; }
 section[data-testid="stSidebar"] { background-color: #0f1729; }
 h1, h2, h3 { color: #e2e8f0 !important; }
-.block-container { padding-top: 4.5rem; }
+.block-container { padding-top: 2.25rem; }
 [data-testid="stToolbar"] { display: none; }
 [data-testid="stDecoration"] { display: none; }
 /* Keep sidebar controls available without a fixed opaque overlay. */
