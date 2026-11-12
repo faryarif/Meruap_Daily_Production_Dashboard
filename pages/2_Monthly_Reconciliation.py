@@ -32,6 +32,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 require_access()
+inject_styles(st)
 render_app_header("monthly")
 
 aily_Report.py")
