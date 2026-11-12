@@ -3,7 +3,7 @@ import hmac
 
 import streamlit as st
 
-from meruap_brand import MERUAP_LOGO, MERUAP_LOGO_BASE64
+from meruap_brand import MERUAP_LOGO_BASE64
 
 
 def _render_brand():
