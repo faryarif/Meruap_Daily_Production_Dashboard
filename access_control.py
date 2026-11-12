@@ -83,11 +83,11 @@ def render_app_header(active_page):
 
 def require_access():
     """Require the shared access ID before rendering any dashboard page."""
-    _render_brand()
     access_config = st.secrets.get("access", {})
     expected_id = access_config.get("id") if hasattr(access_config, "get") else None
 
     if not isinstance(expected_id, str) or not expected_id:
+        _render_brand()
         st.title("Akses Dashboard Meruap")
         st.error("ID akses belum dikonfigurasi untuk aplikasi ini.")
         st.markdown("Tambahkan ID di **Streamlit Settings → Secrets**:")
@@ -102,6 +102,7 @@ def require_access():
                 st.rerun()
         return
 
+    _render_brand()
     st.title("Akses Dashboard Meruap")
     st.caption("Masukkan ID akses yang diberikan pengelola dashboard.")
     with st.form("dashboard_access_login", clear_on_submit=True):
