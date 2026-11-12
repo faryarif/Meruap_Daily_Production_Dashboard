@@ -35,7 +35,6 @@ require_access()
 inject_styles(st)
 render_app_header("monthly")
 
-aily_Report.py")
 
 
 header_slot = st.container()
