@@ -13,6 +13,7 @@ from styles import inject_styles
 from historical_uploader import render_wds_uploader
 from decline_review import render_decline_review
 from water_cut_alerts import assess_water_cut
+from well_standings import render_well_standings
 
 
 def calculate_well_alerts(current_df, previous_df, water_cut_assessments):
@@ -460,7 +461,4 @@ else:
         },
     )
 
-st.subheader("Well Data")
-table_cols = ["ALIAS", "field", "status", "OIL", "WATER", "bfpd", "water_cut_pct", "injection_rate"]
-visible_cols = [c for c in table_cols if c in filtered.columns]
-st.dataframe(filtered[visible_cols].sort_values("OIL", ascending=False), use_container_width=True, hide_index=True)
+render_well_standings(filtered, selected_date_str, field_filter)
