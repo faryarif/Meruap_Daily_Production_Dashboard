@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from access_control import require_access
+from access_control import render_app_header, require_access
 
 from constants import APP_TITLE, PAGE_ICON
 from monthly_reconciliation import (
@@ -32,21 +32,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 require_access()
-inject_styles(st)
+render_app_header("monthly")
 
-nav_daily, nav_whatsapp, nav_monthly = st.columns(3)
-with nav_daily:
-    if st.button("Laporan Produksi Harian", key="top_nav_daily", use_container_width=True,
-                 type="secondary"):
-        st.switch_page("app.py")
-with nav_monthly:
-    if st.button("Laporan Lifting Bulanan", key="top_nav_monthly", use_container_width=True,
-                 type="primary"):
-        st.switch_page("pages/2_Monthly_Reconciliation.py")
-with nav_whatsapp:
-    if st.button("Laporan Lifting Harian", key="top_nav_whatsapp", use_container_width=True,
-                 type="secondary"):
-        st.switch_page("pages/3_WhatsApp_Daily_Report.py")
+aily_Report.py")
 
 
 header_slot = st.container()
