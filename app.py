@@ -128,9 +128,9 @@ display_wells = wells_df if selected_date_str == dates[0] else enrich_with_locat
 filtered = filter_by_field(display_wells, field_filter)
 reported_totals = pd.to_numeric(display_wells.get("reported_total"), errors="coerce").dropna()
 reported_total = float(reported_totals.iloc[0]) if not reported_totals.empty else None
-all_layer_wells = filter_by_field(read_all_layer_snapshot(selected_date_str), field_filter)
+all_layer_wells = filter_by_field(enrich_with_locations(read_all_layer_snapshot(selected_date_str).drop(columns=["status", "field", "latitude", "longitude"], errors="ignore"), locations_df), field_filter)
 previous_date_str = (pd.Timestamp(selected_date) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-previous_all_layer_wells = filter_by_field(read_all_layer_snapshot(previous_date_str), field_filter)
+previous_all_layer_wells = filter_by_field(enrich_with_locations(read_all_layer_snapshot(previous_date_str).drop(columns=["status", "field", "latitude", "longitude"], errors="ignore"), locations_df), field_filter)
 water_cut_assessments = {}
 water_cut_load_failed = False
 
