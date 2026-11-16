@@ -99,7 +99,7 @@ try:
     locations_df = read_locations()
     trend_df = read_daily_trend()
     dates = sorted(trend_df["date"].dropna().unique(), reverse=True) if not trend_df.empty else []
-    wells_df = enrich_with_locations(read_snapshot(dates[0]), locations_df) if dates else pd.DataFrame(columns=DATA_PROD_COLS + ["status", "field", "latitude", "longitude"])
+    wells_df = enrich_with_locations(read_snapshot(dates[0]).drop(columns=["status", "field", "latitude", "longitude"], errors="ignore"), locations_df) if dates else pd.DataFrame(columns=DATA_PROD_COLS + ["status", "field", "latitude", "longitude"])
 except Exception as exc:
     st.error(f"Couldn't load dashboard data. Check your Supabase connection/query configuration. Details: {exc}")
     wells_df = pd.DataFrame(columns=DATA_PROD_COLS)
@@ -124,7 +124,7 @@ with col_controls:
 
 render_wds_uploader()
 
-display_wells = wells_df if selected_date_str == dates[0] else enrich_with_locations(read_snapshot(selected_date_str), locations_df)
+display_wells = wells_df if selected_date_str == dates[0] else enrich_with_locations(read_snapshot(selected_date_str).drop(columns=["status", "field", "latitude", "longitude"], errors="ignore"), locations_df)
 filtered = filter_by_field(display_wells, field_filter)
 reported_totals = pd.to_numeric(display_wells.get("reported_total"), errors="coerce").dropna()
 reported_total = float(reported_totals.iloc[0]) if not reported_totals.empty else None
