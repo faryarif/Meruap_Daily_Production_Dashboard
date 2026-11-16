@@ -53,8 +53,8 @@ def render_wds_uploader():
         st.dataframe(errors, use_container_width=True, hide_index=True)
 
     if result.empty:
-        st.error("No production rows were extracted.")
-        return
+        st.error("No production rows were extracted. Review the file-specific error details above, then remove or replace the file.")
+        st.stop()
 
     st.success(f"Extracted {len(result):,} unique date + well records.")
     preview = result.drop(columns=["source_file"]).copy()

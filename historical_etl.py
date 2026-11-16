@@ -97,39 +97,18 @@ def _find_stacked_header_column(raw_df, header_row, *names, depth=3):
 
 
 def _read_reported_total(raw_bytes):
-    """Read Actual Production from the value beside the TOTAL PROD label."""
     workbook = load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
     try:
-        value = None
-        for worksheet in workbook.worksheets:
-            for row in worksheet.iter_rows():
-                for cell in row:
-                    label = re.sub(r"[^a-z0-9]+", "", str(cell.value or "").lower())
-                    if label != "totalprod":
-                        continue
-
-                    # Prefer the first numeric value to the right of the label
-                    # on the same row, regardless of its column address.
-                    for candidate in row[cell.column:]:
-                        candidate_value = candidate.value
-                        if isinstance(candidate_value, str):
-                            candidate_value = candidate_value.replace(",", "").strip()
-                        total = pd.to_numeric(candidate_value, errors="coerce")
-                        if pd.notna(total):
-                            value = float(total)
-                            break
-                    if value is not None:
-                        break
-                if value is not None:
-                    break
-            if value is not None:
-                break
+        value = workbook[workbook.sheetnames[0]]["AH2"].value
     finally:
         workbook.close()
 
-    if value is None:
-        raise ValueError('Could not find a numeric value to the right of "TOTAL PROD:".')
-    return value
+    if isinstance(value, str):
+        value = value.replace(",", "").strip()
+    total = pd.to_numeric(value, errors="coerce")
+    if pd.isna(total):
+        raise ValueError("Could not read Actual Production from the designated Excel cell.")
+    return float(total)
 
 
 def extract_wds_file(uploaded_file):

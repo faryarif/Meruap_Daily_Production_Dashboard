@@ -6,7 +6,7 @@ from access_control import render_app_header, require_access
 from charts import make_well_history_multi_fig, make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_decline_window, read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
-from helpers import filter_by_field, field_options, missing_coordinate_aliases
+from helpers import enrich_with_locations, filter_by_field, field_options, missing_coordinate_aliases
 from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
@@ -99,7 +99,7 @@ try:
     locations_df = read_locations()
     trend_df = read_daily_trend()
     dates = sorted(trend_df["date"].dropna().unique(), reverse=True) if not trend_df.empty else []
-    wells_df = read_snapshot(dates[0]) if dates else pd.DataFrame(columns=DATA_PROD_COLS)
+    wells_df = enrich_with_locations(read_snapshot(dates[0]), locations_df) if dates else pd.DataFrame(columns=DATA_PROD_COLS + ["status", "field", "latitude", "longitude"])
 except Exception as exc:
     st.error(f"Couldn't load dashboard data. Check your Supabase connection/query configuration. Details: {exc}")
     wells_df = pd.DataFrame(columns=DATA_PROD_COLS)
@@ -124,7 +124,7 @@ with col_controls:
 
 render_wds_uploader()
 
-display_wells = wells_df if selected_date_str == dates[0] else read_snapshot(selected_date_str)
+display_wells = wells_df if selected_date_str == dates[0] else enrich_with_locations(read_snapshot(selected_date_str), locations_df)
 filtered = filter_by_field(display_wells, field_filter)
 reported_totals = pd.to_numeric(display_wells.get("reported_total"), errors="coerce").dropna()
 reported_total = float(reported_totals.iloc[0]) if not reported_totals.empty else None
