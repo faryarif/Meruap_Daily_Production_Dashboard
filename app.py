@@ -336,48 +336,39 @@ with detail_col:
         history_period = st.selectbox(
             "Well history period",
             ["90 Days", "1 Year", "3 Years", "5 Years", "10 Years"],
-            index=1,
+            index=0,
             key="well_decline_history_period",
         )
-        load_well_history = st.checkbox(
-            "Load well history",
-            value=False,
-            key="load_well_history_on_demand",
-        )
 
-        if not load_well_history:
-            with graph_slot:
-                st.caption("Choose the well and metrics below, then load the history when needed.")
+        history_end = pd.Timestamp(selected_date).normalize()
+        if history_period.endswith("Days"):
+            history_start = history_end - pd.Timedelta(
+                days=int(history_period.split()[0]) - 1
+            )
         else:
-            history_end = pd.Timestamp(selected_date).normalize()
-            if history_period.endswith("Days"):
-                history_start = history_end - pd.Timedelta(
-                    days=int(history_period.split()[0])
+            history_start = history_end - pd.DateOffset(
+                years=int(history_period.split()[0])
+            )
+        try:
+            with st.spinner(f"Loading {history_period.lower()} of history for {selected_well}..."):
+                well_history = read_well_history(
+                    selected_well,
+                    history_start.strftime("%Y-%m-%d"),
+                    history_end.strftime("%Y-%m-%d"),
                 )
-            else:
-                history_start = history_end - pd.DateOffset(
-                    years=int(history_period.split()[0])
-                )
-            try:
-                with st.spinner(f"Loading {history_period.lower()} of history for {selected_well}..."):
-                    well_history = read_well_history(
-                        selected_well,
-                        history_start.strftime("%Y-%m-%d"),
-                        history_end.strftime("%Y-%m-%d"),
+            with graph_slot:
+                if well_history.empty:
+                    st.caption(f"No history found for {selected_well} in the selected period.")
+                else:
+                    st.plotly_chart(
+                        make_well_history_multi_fig(
+                            well_history.sort_values("date"), enabled_metrics
+                        ),
+                        use_container_width=True,
                     )
-                with graph_slot:
-                    if well_history.empty:
-                        st.caption(f"No history found for {selected_well} in the selected period.")
-                    else:
-                        st.plotly_chart(
-                            make_well_history_multi_fig(
-                                well_history.sort_values("date"), enabled_metrics
-                            ),
-                            use_container_width=True,
-                        )
-            except Exception as exc:
-                with graph_slot:
-                    st.warning(f"Well history unavailable: {exc}")
+        except Exception as exc:
+            with graph_slot:
+                st.warning(f"Well history unavailable: {exc}")
 
 render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
 
