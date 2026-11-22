@@ -326,11 +326,15 @@ with detail_col:
         # Keep controls below the graph while letting the graph load only on request.
         st.selectbox("Select a well", options, key="well_decline_selected_well")
         enabled_metrics = []
+        default_metrics = {"BOPD", "Water Cut %"}
         toggle_columns = st.columns(len(metric_options))
         for index, label in enumerate(metric_options):
             with toggle_columns[index]:
-                if st.checkbox(label, value=(label == "BOPD"),
-                               key=f"well_decline_show_{index}"):
+                if st.checkbox(
+                    label,
+                    value=(label in default_metrics),
+                    key=f"well_decline_show_v2_{index}",
+                ):
                     enabled_metrics.append(label)
 
         history_period = st.selectbox(
