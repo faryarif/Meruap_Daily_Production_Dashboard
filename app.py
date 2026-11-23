@@ -340,7 +340,7 @@ else:
 
 top_col, contributor_col = st.columns(2)
 with top_col:
-    st.subheader("Top Producing Wells")
+    st.subheader("Top 10 Producing Wells")
     st.plotly_chart(make_top_wells_bar(filtered), use_container_width=True)
 with contributor_col:
     st.subheader("Top 10 Oil Decline Contributors")
