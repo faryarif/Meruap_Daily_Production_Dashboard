@@ -40,18 +40,18 @@ def render_decline_contributors(trend, locations, selected_date, field):
 
     fig = px.bar(
         declined,
-        x="Change BOPD",
-        y="Well",
-        orientation="h",
+        x="Well",
+        y="Change BOPD",
         color_discrete_sequence=["#ef4444"],
     )
     fig.update_traces(
-        hovertemplate="Well=%{y}<br>Change BOPD=%{x:,.1f}<extra></extra>"
+        hovertemplate="Well=%{x}<br>Change in average oil=%{y:,.1f} BOPD<extra></extra>"
     )
     fig.update_layout(
-        height=330,
+        height=360,
         margin=dict(l=0, r=0, t=10, b=0),
-        xaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
+        xaxis=dict(title="Well", categoryorder="array", categoryarray=declined["Well"].tolist()),
+        yaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
