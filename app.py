@@ -11,7 +11,7 @@ from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
 from historical_uploader import render_wds_uploader
-from decline_review import render_decline_review
+from decline_review import render_decline_contributors, render_decline_review
 from water_cut_alerts import assess_water_cut
 from well_standings import render_well_standings
 
@@ -302,6 +302,7 @@ top_col, detail_col = st.columns(2)
 with top_col:
     st.subheader("Top Producing Wells")
     st.plotly_chart(make_top_wells_bar(filtered), use_container_width=True)
+    render_decline_contributors(trend_df, locations_df, selected_date_str, field_filter)
 with detail_col:
     st.subheader("Well Decline Trend")
     options = filtered["ALIAS"].tolist()

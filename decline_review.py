@@ -260,6 +260,48 @@ def report_html(review, basis, actions, events):
     </body></html>'''
 
 
+def render_decline_contributors(trend, locations, selected_date, field):
+    """Show only the ranked well oil declines without enabling the full management review."""
+    import streamlit as st
+    import plotly.express as px
+    from database import read_decline_window
+
+    try:
+        with st.spinner("Preparing oil decline contributors..."):
+            review = build_review(
+                read_decline_window(selected_date), trend, locations, selected_date, field
+            )
+    except Exception as exc:
+        st.caption(f"Top 10 oil decline contributors unavailable: {exc}")
+        return
+
+    declined = (
+        review["wells"].loc[review["wells"]["Change BOPD"] < 0]
+        .nsmallest(10, "Change BOPD")
+        .sort_values("Change BOPD", ascending=False)
+    )
+    if declined.empty:
+        st.caption("No comparable wells show an oil decline in this review window.")
+        return
+
+    fig = px.bar(
+        declined,
+        x="Change BOPD",
+        y="Well",
+        orientation="h",
+        color_discrete_sequence=["#ef4444"],
+    )
+    fig.update_traces(
+        hovertemplate="Well=%{y}<br>Change BOPD=%{x:,.1f}<extra></extra>"
+    )
+    fig.update_layout(
+        height=330,
+        margin=dict(l=0, r=0, t=10, b=0),
+        xaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def render_decline_review(trend, locations, selected_date, field):
     import streamlit as st
     import plotly.express as px
@@ -313,19 +355,6 @@ def render_decline_review(trend, locations, selected_date, field):
         st.caption("Enter confirmed events only. Notes stay in this browser session; download the report to retain them.")
         events = st.data_editor(pd.DataFrame({"Date": pd.Series(dtype="datetime64[ns]"), "Event": pd.Series(dtype="str")}), num_rows="dynamic", key=f"review_events_{scope}", use_container_width=True)
     st.plotly_chart(make_review_chart(review, basis, events), use_container_width=True)
-    st.markdown("#### Top 10 Oil Decline Contributors")
-    declined = wells[wells["Change BOPD"] < 0].head(10).sort_values("Change BOPD", ascending=False)
-    if declined.empty:
-        st.info("No comparable wells show a decline, or observations are incomplete.")
-    else:
-        fig = px.bar(declined, x="Change BOPD", y="Well", orientation="h", color_discrete_sequence=["#ef4444"])
-        fig.update_traces(hovertemplate="Well=%{y}<br>Change BOPD=%{x:,.1f}<extra></extra>")
-        fig.update_layout(
-            height=330,
-            margin=dict(l=0, r=0, t=10, b=0),
-            xaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
-        )
-        st.plotly_chart(fig, use_container_width=True)
     deltas = wells["Change BOPD"].dropna()
     if not deltas.empty:
         st.caption(f"Comparable wells ({len(deltas)}/{len(wells)}): declines {deltas[deltas<0].sum():,.1f} BOPD; gains +{deltas[deltas>0].sum():,.1f} BOPD; net {deltas.sum():+,.1f} BOPD. Well contributions explain AllLayer oil, not an allocation of Actual Production.")
