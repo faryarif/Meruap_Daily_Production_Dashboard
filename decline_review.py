@@ -312,9 +312,9 @@ def render_decline_review(trend, locations, selected_date, field):
         for column in columns
     }
     st.subheader("Oil Production Decline — 14-Day Review")
+    st.caption("Compare the latest 14 days with the preceding 14 days; load the review on demand.")
     enabled = st.checkbox("Show management review", value=False, key="show_oil_management_review")
     if not enabled:
-        st.caption("Compare the latest 14 days with the preceding 14 days; load the review on demand.")
         return
     try:
         with st.spinner("Preparing the management review..."):
