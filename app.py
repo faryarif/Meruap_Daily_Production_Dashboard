@@ -49,7 +49,7 @@ def render_decline_contributors(trend, locations, selected_date, field):
     )
     apply_dark_layout(fig, 390)
     fig.update_layout(
-        xaxis=dict(title="Well", categoryorder="array", categoryarray=declined["Well"].tolist()),
+        xaxis=dict(title=None, categoryorder="array", categoryarray=declined["Well"].tolist()),
         yaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f", autorange="reversed", rangemode="tozero"),
     )
     st.plotly_chart(fig, use_container_width=True)
