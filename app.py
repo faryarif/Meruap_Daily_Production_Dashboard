@@ -451,14 +451,9 @@ if load_water_cut_review:
 well_alerts = calculate_well_alerts(
     all_layer_wells, previous_all_layer_wells, water_cut_assessments
 )
-if not load_water_cut_review:
-    st.info(
-        "Water-cut review is not loaded. Oil alerts remain available; "
-        "select the box above to include water-cut checks."
-    )
-elif water_cut_load_failed:
+if load_water_cut_review and water_cut_load_failed:
     st.warning("Water-cut assessment unavailable: history could not be loaded. Oil alerts remain available.")
-elif water_cut_assessments:
+elif load_water_cut_review and water_cut_assessments:
     assessed = sum(item["WC Status"] == "Assessed" for item in water_cut_assessments.values())
     st.caption(f"Water-cut coverage: {assessed}/{len(water_cut_assessments)} wells assessed.")
     excluded = [
@@ -469,9 +464,7 @@ elif water_cut_assessments:
     if excluded:
         with st.expander("Water-cut data status and exclusions"):
             st.dataframe(pd.DataFrame(excluded), hide_index=True, use_container_width=True)
-if well_alerts.empty:
-    st.info("No alerts triggered by the available assessments for the selected date and field.")
-else:
+if not well_alerts.empty:
     st.dataframe(
         well_alerts,
         use_container_width=True,
