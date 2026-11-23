@@ -11,9 +11,49 @@ from maps import make_well_map
 from metrics import calculate_daily_changes, calculate_kpis
 from styles import inject_styles
 from historical_uploader import render_wds_uploader
-from decline_review import render_decline_contributors, render_decline_review
+from decline_review import build_review, render_decline_review
 from water_cut_alerts import assess_water_cut
 from well_standings import render_well_standings
+
+
+def render_decline_contributors(trend, locations, selected_date, field):
+    """Show the ranked oil-decline chart without requiring the full review toggle."""
+    import plotly.express as px
+
+    try:
+        with st.spinner("Preparing oil decline contributors..."):
+            review = build_review(
+                read_decline_window(selected_date), trend, locations, selected_date, field
+            )
+    except Exception as exc:
+        st.caption(f"Top 10 oil decline contributors unavailable: {exc}")
+        return
+
+    declined = (
+        review["wells"].loc[review["wells"]["Change BOPD"] < 0]
+        .nsmallest(10, "Change BOPD")
+        .sort_values("Change BOPD", ascending=False)
+    )
+    if declined.empty:
+        st.caption("No comparable wells show an oil decline in this review window.")
+        return
+
+    fig = px.bar(
+        declined,
+        x="Change BOPD",
+        y="Well",
+        orientation="h",
+        color_discrete_sequence=["#ef4444"],
+    )
+    fig.update_traces(
+        hovertemplate="Well=%{y}<br>Change BOPD=%{x:,.1f}<extra></extra>"
+    )
+    fig.update_layout(
+        height=330,
+        margin=dict(l=0, r=0, t=10, b=0),
+        xaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def calculate_well_alerts(current_df, previous_df, water_cut_assessments):
