@@ -323,18 +323,7 @@ with detail_col:
         selected_well = st.session_state["well_decline_selected_well"]
         graph_slot = st.container()
 
-        # Keep the selector and period control in one compact row below the graph.
-        well_control, period_control = st.columns([2, 1])
-        with well_control:
-            st.selectbox("Select a well", options, key="well_decline_selected_well")
-        with period_control:
-            history_period = st.selectbox(
-                "Well history period",
-                ["90 Days", "1 Year", "3 Years", "5 Years", "10 Years"],
-                index=0,
-                key="well_decline_history_period",
-            )
-
+        # Keep metric toggles above the well and period controls below the graph.
         enabled_metrics = []
         default_metrics = {"BOPD", "Water Cut %"}
         toggle_columns = st.columns(len(metric_options))
@@ -346,6 +335,17 @@ with detail_col:
                     key=f"well_decline_show_v2_{index}",
                 ):
                     enabled_metrics.append(label)
+
+        well_control, period_control = st.columns([2, 1])
+        with well_control:
+            st.selectbox("Select a well", options, key="well_decline_selected_well")
+        with period_control:
+            history_period = st.selectbox(
+                "Well history period",
+                ["90 Days", "1 Year", "3 Years", "5 Years", "10 Years"],
+                index=0,
+                key="well_decline_history_period",
+            )
 
         history_end = pd.Timestamp(selected_date).normalize()
         if history_period.endswith("Days"):
