@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 from access_control import render_app_header, require_access
-from charts import make_well_history_multi_fig, make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
+from charts import apply_dark_layout, make_well_history_multi_fig, make_field_totals_bar, make_injection_trend_fig, make_production_trend_fig, make_status_pie, make_top_wells_bar, make_trend_fig, make_water_cut_trend_fig, make_well_history_fig
 from constants import APP_TITLE, DATA_PROD_COLS, LOCATION_HEAD_COLS, PAGE_ICON
 from database import read_decline_window, read_all_layer_snapshot, read_daily_trend, read_snapshot, read_locations, read_well_history
 from helpers import enrich_with_locations, filter_by_field, field_options, missing_coordinate_aliases
@@ -47,9 +47,8 @@ def render_decline_contributors(trend, locations, selected_date, field):
     fig.update_traces(
         hovertemplate="Well=%{x}<br>Change in average oil=%{y:,.1f} BOPD<extra></extra>"
     )
+    apply_dark_layout(fig, 390)
     fig.update_layout(
-        height=360,
-        margin=dict(l=0, r=0, t=10, b=0),
         xaxis=dict(title="Well", categoryorder="array", categoryarray=declined["Well"].tolist()),
         yaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f", autorange="reversed", rangemode="tozero"),
     )
