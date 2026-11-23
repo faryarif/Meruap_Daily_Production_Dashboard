@@ -51,7 +51,7 @@ def render_decline_contributors(trend, locations, selected_date, field):
         height=360,
         margin=dict(l=0, r=0, t=10, b=0),
         xaxis=dict(title="Well", categoryorder="array", categoryarray=declined["Well"].tolist()),
-        yaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f"),
+        yaxis=dict(title="Change in average oil (BOPD)", tickformat=",.1f", autorange="reversed", rangemode="tozero"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
