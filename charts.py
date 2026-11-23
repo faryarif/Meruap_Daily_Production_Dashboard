@@ -69,7 +69,7 @@ def make_injection_trend_fig(inj_by_date):
 def make_top_wells_bar(filtered_df):
     top_wells = filtered_df.sort_values("OIL", ascending=False).head(10)
     fig = px.bar(top_wells, x="ALIAS", y="OIL", color_discrete_sequence=["#38bdf8"])
-    apply_dark_layout(fig, 390); fig.update_layout(xaxis_title=None, yaxis_title="BOPD"); return fig
+    apply_dark_layout(fig, 390); fig.update_layout(xaxis_title="Well", yaxis_title="BOPD"); return fig
 
 
 def make_well_history_fig(well_history, y_col, line_color, fill_color, y_title):
