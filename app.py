@@ -338,85 +338,87 @@ if not trend_df.empty:
 else:
     st.caption("No history yet - upload data to see the trend.")
 
-top_col, detail_col = st.columns(2)
+top_col, contributor_col = st.columns(2)
 with top_col:
     st.subheader("Top Producing Wells")
     st.plotly_chart(make_top_wells_bar(filtered), use_container_width=True)
+with contributor_col:
+    st.subheader("Top 10 Oil Decline Contributors")
     render_decline_contributors(trend_df, locations_df, selected_date_str, field_filter)
-with detail_col:
-    st.subheader("Well Decline Trend")
-    options = filtered["ALIAS"].tolist()
-    metric_options = {
-        "BOPD": ("OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"),
-        "BFPD": ("bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"),
-        "BWPD": ("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"),
-        "Water Cut %": ("water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)"),
-        "Gas (MCF)": ("GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"),
-    }
 
-    if not options:
-        st.caption("No wells to display for this filter.")
+st.subheader("Well Decline Trend")
+options = filtered["ALIAS"].tolist()
+metric_options = {
+    "BOPD": ("OIL", "#22c55e", "rgba(34,197,94,0.2)", "BOPD"),
+    "BFPD": ("bfpd", "#eab308", "rgba(234,179,9,0.2)", "BFPD"),
+    "BWPD": ("WATER", "#38bdf8", "rgba(56,189,248,0.2)", "BWPD"),
+    "Water Cut %": ("water_cut_pct", "#38bdf8", "rgba(56,189,248,0.15)", "Water Cut (%)"),
+    "Gas (MCF)": ("GAS", "#f97316", "rgba(249,115,22,0.2)", "MCF"),
+}
+
+if not options:
+    st.caption("No wells to display for this filter.")
+else:
+    top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
+    if st.session_state.get("well_decline_selected_well") not in options:
+        st.session_state["well_decline_selected_well"] = top_well
+
+    selected_well = st.session_state["well_decline_selected_well"]
+    graph_slot = st.container()
+
+    # Keep metric toggles above the well and period controls below the graph.
+    enabled_metrics = []
+    default_metrics = {"BOPD", "Water Cut %"}
+    toggle_columns = st.columns(len(metric_options))
+    for index, label in enumerate(metric_options):
+        with toggle_columns[index]:
+            if st.checkbox(
+                label,
+                value=(label in default_metrics),
+                key=f"well_decline_show_v2_{index}",
+            ):
+                enabled_metrics.append(label)
+
+    well_control, period_control = st.columns([2, 1])
+    with well_control:
+        st.selectbox("Select a well", options, key="well_decline_selected_well")
+    with period_control:
+        history_period = st.selectbox(
+            "Well history period",
+            ["90 Days", "1 Year", "3 Years", "5 Years", "10 Years"],
+            index=0,
+            key="well_decline_history_period",
+        )
+
+    history_end = pd.Timestamp(selected_date).normalize()
+    if history_period.endswith("Days"):
+        history_start = history_end - pd.Timedelta(
+            days=int(history_period.split()[0]) - 1
+        )
     else:
-        top_well = filtered.sort_values("OIL", ascending=False).iloc[0]["ALIAS"]
-        if st.session_state.get("well_decline_selected_well") not in options:
-            st.session_state["well_decline_selected_well"] = top_well
-
-        selected_well = st.session_state["well_decline_selected_well"]
-        graph_slot = st.container()
-
-        # Keep metric toggles above the well and period controls below the graph.
-        enabled_metrics = []
-        default_metrics = {"BOPD", "Water Cut %"}
-        toggle_columns = st.columns(len(metric_options))
-        for index, label in enumerate(metric_options):
-            with toggle_columns[index]:
-                if st.checkbox(
-                    label,
-                    value=(label in default_metrics),
-                    key=f"well_decline_show_v2_{index}",
-                ):
-                    enabled_metrics.append(label)
-
-        well_control, period_control = st.columns([2, 1])
-        with well_control:
-            st.selectbox("Select a well", options, key="well_decline_selected_well")
-        with period_control:
-            history_period = st.selectbox(
-                "Well history period",
-                ["90 Days", "1 Year", "3 Years", "5 Years", "10 Years"],
-                index=0,
-                key="well_decline_history_period",
+        history_start = history_end - pd.DateOffset(
+            years=int(history_period.split()[0])
+        )
+    try:
+        with st.spinner(f"Loading {history_period.lower()} of history for {selected_well}..."):
+            well_history = read_well_history(
+                selected_well,
+                history_start.strftime("%Y-%m-%d"),
+                history_end.strftime("%Y-%m-%d"),
             )
-
-        history_end = pd.Timestamp(selected_date).normalize()
-        if history_period.endswith("Days"):
-            history_start = history_end - pd.Timedelta(
-                days=int(history_period.split()[0]) - 1
-            )
-        else:
-            history_start = history_end - pd.DateOffset(
-                years=int(history_period.split()[0])
-            )
-        try:
-            with st.spinner(f"Loading {history_period.lower()} of history for {selected_well}..."):
-                well_history = read_well_history(
-                    selected_well,
-                    history_start.strftime("%Y-%m-%d"),
-                    history_end.strftime("%Y-%m-%d"),
+        with graph_slot:
+            if well_history.empty:
+                st.caption(f"No history found for {selected_well} in the selected period.")
+            else:
+                st.plotly_chart(
+                    make_well_history_multi_fig(
+                        well_history.sort_values("date"), enabled_metrics
+                    ),
+                    use_container_width=True,
                 )
-            with graph_slot:
-                if well_history.empty:
-                    st.caption(f"No history found for {selected_well} in the selected period.")
-                else:
-                    st.plotly_chart(
-                        make_well_history_multi_fig(
-                            well_history.sort_values("date"), enabled_metrics
-                        ),
-                        use_container_width=True,
-                    )
-        except Exception as exc:
-            with graph_slot:
-                st.warning(f"Well history unavailable: {exc}")
+    except Exception as exc:
+        with graph_slot:
+            st.warning(f"Well history unavailable: {exc}")
 
 render_decline_review(trend_df, locations_df, selected_date_str, field_filter)
 
