@@ -6,4 +6,3 @@ openpyxl
 xlrd==2.0.2
 numpy
 psycopg2-binary
-openai
