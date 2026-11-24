@@ -439,7 +439,7 @@ with st.popover(
     else:
         st.caption("Jawaban menggunakan konteks dashboard yang sedang tampil. Data dikirim ke OpenRouter untuk diproses.")
 
-    for chat_message in assistant_messages[-8:]:
+    for chat_message in assistant_messages[-12:]:
         with st.chat_message(chat_message["role"]):
             st.markdown(chat_message["content"])
 
@@ -470,7 +470,7 @@ with st.popover(
         except Exception:
             reply = "Saya belum bisa menghubungi OpenRouter. Periksa konfigurasi API key, model, dan koneksi aplikasi."
         assistant_messages.append({"role": "assistant", "content": reply})
-        del assistant_messages[:-12]
+        del assistant_messages[:-20]
         st.rerun()
 
 if load_water_cut_review and water_cut_load_failed:
