@@ -197,7 +197,7 @@ c4.metric("Total Water Production", f"{kpis['total_water_production']:,} BWPD", 
 c5.metric("Total Water Injection", f"{kpis['total_injection']:,} BWPD", f"{changes['injection_change']:+,} BWPD vs yesterday" if changes["injection_change"] is not None else None)
 c6.metric("Total Water Source", f"{kpis['total_water_source']:,} BWPD", f"{changes['water_source_change']:+,} BWPD vs yesterday" if changes["water_source_change"] is not None else None)
 
-# Floating UI preview: local demo only; no dashboard data is sent to an AI service.
+# Floating AI assistant: uses only data already loaded on this page.
 st.markdown(
     """
     <style>
@@ -213,30 +213,50 @@ with st.popover(
     type="primary",
     key="dashboard_ai_popup",
 ):
-    st.caption("Mode uji tampilan — belum tersambung ke AI atau data dashboard.")
-    st.info("Pesan hanya diproses di sesi ini. Tidak dikirim ke OpenAI atau Supabase.")
-    demo_messages = st.session_state.setdefault("dashboard_ai_demo_messages", [])
-    for demo_message in demo_messages[-6:]:
-        with st.chat_message(demo_message["role"]):
-            st.markdown(demo_message["content"])
+    from dashboard_assistant import (
+        answer_dashboard_question,
+        build_dashboard_context,
+        is_assistant_configured,
+    )
 
-    with st.form("dashboard_ai_demo_form", clear_on_submit=True):
-        demo_question = st.text_input(
+    assistant_messages = st.session_state.setdefault("dashboard_ai_messages", [])
+    if not is_assistant_configured():
+        st.caption("OpenRouter belum dikonfigurasi. Tambahkan API key di Streamlit Secrets untuk mulai bertanya.")
+    else:
+        st.caption("Jawaban menggunakan konteks dashboard yang sedang tampil. Data dikirim ke OpenRouter untuk diproses.")
+
+    for chat_message in assistant_messages[-8:]:
+        with st.chat_message(chat_message["role"]):
+            st.markdown(chat_message["content"])
+
+    with st.form("dashboard_ai_chat_form", clear_on_submit=True):
+        user_question = st.text_input(
             "Tulis pertanyaan",
-            placeholder="Contoh: apa yang bisa saya tanyakan?",
+            placeholder="Contoh: sumur mana yang paling banyak turun?",
             label_visibility="collapsed",
         )
-        demo_submitted = st.form_submit_button("Kirim", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Kirim", type="primary", use_container_width=True)
 
-    if demo_submitted and demo_question.strip():
-        demo_messages.append({"role": "user", "content": demo_question.strip()})
-        demo_messages.append({
-            "role": "assistant",
-            "content": (
-                "Pop-up chat sudah berjalan. Ini masih jawaban contoh; "
-                "analisis data produksi akan diaktifkan setelah Anda memilih dan menyetujui koneksi AI."
-            ),
-        })
+    if submitted and user_question.strip():
+        question = user_question.strip()
+        assistant_messages.append({"role": "user", "content": question})
+        context = build_dashboard_context(
+            selected_date_str,
+            field_filter,
+            reported_total,
+            kpis,
+            changes,
+            trend_df,
+            filtered,
+            well_alerts,
+        )
+        try:
+            with st.spinner("Menyiapkan jawaban..."):
+                reply = answer_dashboard_question(question, assistant_messages[:-1], context)
+        except Exception:
+            reply = "Saya belum bisa menghubungi OpenRouter. Periksa konfigurasi API key, model, dan koneksi aplikasi."
+        assistant_messages.append({"role": "assistant", "content": reply})
+        del assistant_messages[:-12]
         st.rerun()
 
 pie_col, map_col = st.columns([1, 1.3])
