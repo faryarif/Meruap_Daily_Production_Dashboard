@@ -89,7 +89,7 @@ def require_access():
     if not isinstance(expected_id, str) or not expected_id:
         _render_brand()
         st.title("Akses Dashboard Meruap")
-        st.error("ID akses belum dikonfigurasi untuk aplikasi ini.")
+        st.error("Access ID belum dikonfigurasi untuk aplikasi ini.")
         st.markdown("Tambahkan ID di **Streamlit Settings → Secrets**:")
         st.code('[access]\nid = "GANTI_DENGAN_ID_AKSES_RAHASIA"')
         st.stop()
@@ -104,9 +104,9 @@ def require_access():
 
     _render_brand()
     st.title("Akses Dashboard Meruap")
-    st.caption("Masukkan ID akses yang diberikan pengelola dashboard.")
+    st.caption("Masukkan Access ID yang diberikan pengelola dashboard.")
     with st.form("dashboard_access_login", clear_on_submit=True):
-        entered_id = st.text_input("ID akses")
+        entered_id = st.text_input("Access ID")
         submitted = st.form_submit_button("Masuk", type="primary")
 
     if submitted:
@@ -114,6 +114,6 @@ def require_access():
             st.session_state["dashboard_access_granted"] = True
             st.rerun()
         else:
-            st.error("ID akses tidak valid.")
+            st.error("Access ID tidak valid.")
 
     st.stop()
